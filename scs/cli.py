@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import sys
 import time
@@ -538,8 +539,12 @@ def cmd_planned(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="scs", description="Supply chain scanner: inventory, CVEs, malicious packages.")
-    ap.add_argument("--version", action="version", version=f"scs {__version__}")
+    # `packhound` and `scs` are the same command; help and errors use the name that was typed
+    invoked = os.path.basename(sys.argv[0]).lower()
+    prog = "packhound" if invoked.startswith("packhound") or os.path.basename(os.path.dirname(sys.argv[0])) == "packhound" else "scs"
+    ap = argparse.ArgumentParser(prog=prog, description="Packhound supply chain security scanner: inventory, CVEs, "
+                                                         "malicious packages, runtimes, build chain.")
+    ap.add_argument("--version", action="version", version=f"{prog} {__version__}")
     ap.add_argument("-v", "--verbose", action="store_true")
     sub = ap.add_subparsers(dest="cmd", required=True)
 

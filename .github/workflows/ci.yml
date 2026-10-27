@@ -1,4 +1,5 @@
-# Tests on macOS / Ubuntu / Windows, builds the three installers, publishes them on version tags.
+# Tests on macOS / Ubuntu / Windows, builds the three installers, publishes them on version tags
+# with signed build provenance (attestations) for every file.
 # Supply-chain hygiene: actions pinned to full commit SHAs (Dependabot updates them after a cooldown),
 # read-only token by default, no pull_request_target, checkout without persisted credentials,
 # downloaded toolchains verified (hash + signature) before use, signing secrets optional.
@@ -47,6 +48,7 @@ jobs:
       - name: CLI smoke test
         run: |
           python -m scs --version
+          python -m packhound --version
           python -m scs collectors
           python -m scs scan --format "" --no-save --only pip --limit 3
 
@@ -187,6 +189,7 @@ jobs:
           sudo apt-get install -y ./build/linux/scs_*_all.deb desktop-file-utils
           desktop-file-validate /usr/share/applications/scs.desktop
           scs --version
+          packhound --version
           scs collectors
           XDG_DATA_HOME="$RUNNER_TEMP/scs-data" scs scan --format "" --no-save --only apt --limit 3
           # the GUI server: page loads, API refuses requests without the token
@@ -208,14 +211,23 @@ jobs:
     needs: [build-macos, build-windows, build-linux]
     runs-on: ubuntu-24.04
     permissions:
-      contents: write   # only this job can create the release
+      contents: write       # only this job can create the release
+      id-token: write       # Sigstore signing identity for the provenance attestation
+      attestations: write   # store the attestation with the repository
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
           merge-multiple: true
       - name: Checksums
-        run: cd dist && sha256sum *.dmg *.zip *.deb *-setup.exe 2>/dev/null > SHA256SUMS && cat SHA256SUMS
+        run: |
+          shopt -s nullglob   # a missing installer type (e.g. no Inno Setup) is skipped, not an error
+          cd dist && sha256sum *.dmg *.zip *.deb *-setup.exe > SHA256SUMS && cat SHA256SUMS
+      # signed SLSA build provenance for every file in SHA256SUMS: who built it, from which commit and workflow.
+      # Anyone can check a download with: gh attestation verify <file> --repo trinhm92/Packhound
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/SHA256SUMS
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           draft: true   # review before publishing

@@ -27,6 +27,14 @@ def _q(s: str) -> str:
     return s if re.fullmatch(r"[\w@%+=:,./-]+", s) else "'" + s.replace("'", "'\\''") + "'"
 
 
+def _qp(path: str) -> str:
+    """A quoted path, written as ~/… under the home folder (shorter, and no user name when shared)."""
+    home = os.path.expanduser("~")
+    if os.name != "nt" and path.startswith(home + os.sep):
+        return "~/" + _q(path[len(home) + 1:])
+    return _q(path)
+
+
 def manual_only(p: dict) -> bool:
     meta = p.get("meta") or {}
     return p.get("source") in MANUAL_SOURCES or (p.get("source") == "lockfile" and meta.get("lockfile") in MANUAL_LOCKFILES)
@@ -77,7 +85,7 @@ def _runtime_steps(name: str, version: str, fix: str, p: dict) -> list[dict]:
             steps.append({"text": "This JDK is bundled with the IDE: update the IDE (Help › Check for Updates).", "cmd": ""})
         elif mgr == "Gradle toolchains":
             steps.append({"text": "Gradle downloaded this JDK for a toolchain. Delete it; Gradle fetches a current one "
-                                  "the next time a build needs it.", "cmd": f"rm -rf {_q(loc)}"})
+                                  "the next time a build needs it.", "cmd": f"rm -rf {_qp(loc)}"})
         else:
             url = JDK_DOWNLOADS.get(meta.get("product", ""), JDK_DOWNLOADS["eclipse-temurin"]).format(cycle=new_cycle)
             bundle = loc.split(".jdk/")[0] + ".jdk" if ".jdk/" in loc else loc
@@ -130,25 +138,25 @@ def steps(ecosystem: str, name: str, version: str, fix: str | None, p: dict) -> 
         cache = "Gradle" if meta.get("cache") == "gradle" else "Maven"
         return [{"text": f"A {cache} build on this computer downloaded it. Update the projects that still use it "
                          f"(search them for \"{artifact}\"), then delete the old copy from the cache.",
-                 "cmd": f"rm -rf {_q(p.get('location', ''))}"}]
+                 "cmd": f"rm -rf {_qp(p.get('location', ''))}"}]
     lf, proj = meta.get("lockfile"), meta.get("project", "")
     to = f" to {fix}" if fix else ""
     if lf == "pom.xml":
         return [{"text": f"Set {name}'s version{to} in pom.xml (in <dependencyManagement> if it comes in through "
-                         "another library), then rebuild.", "cmd": f"cd {_q(proj)} && mvn dependency:tree -Dincludes={name}"}]
+                         "another library), then rebuild.", "cmd": f"cd {_qp(proj)} && mvn dependency:tree -Dincludes={name}"}]
     if lf in ("libs.versions.toml", "gradle.lockfile"):
         root = _gradle_root(proj)
         where = "gradle/libs.versions.toml" if lf == "libs.versions.toml" else \
             "the build (version catalog, or a dependency constraint if another library pulls it in)"
         out = [{"text": f"Change {name}{to} in {where}, then rebuild.",
-                "cmd": f"cd {_q(root)} && ./gradlew dependencyInsight --dependency {name}"}]
+                "cmd": f"cd {_qp(root)} && ./gradlew dependencyInsight --dependency {name}"}]
         if lf == "gradle.lockfile":
-            out.append({"text": "Refresh the lockfiles afterwards.", "cmd": f"cd {_q(root)} && ./gradlew dependencies --write-locks"})
+            out.append({"text": "Refresh the lockfiles afterwards.", "cmd": f"cd {_qp(root)} && ./gradlew dependencies --write-locks"})
         return out
     if lf == "packages.lock.json":
         cmd = f"dotnet add package {name}" + (f" --version {fix}" if fix else "") if p.get("direct") else \
             "dotnet list package --include-transitive --vulnerable"
-        return [{"text": f"Update {name}{to} in the project, then restore.", "cmd": f"cd {_q(proj)} && {cmd}"}]
+        return [{"text": f"Update {name}{to} in the project, then restore.", "cmd": f"cd {_qp(proj)} && {cmd}"}]
     return []
 
 
