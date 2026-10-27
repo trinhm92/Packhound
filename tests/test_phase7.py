@@ -185,6 +185,7 @@ class WatchTests(unittest.TestCase):
 
 
 class ScheduleTests(unittest.TestCase):
+    # macOS paths are simulated with platform.system() == "Darwin"; os.getuid (missing on Windows) is patched too
     def test_when_and_renderers(self):
         self.assertEqual(schedule.parse_when("07:05", None), {"hour": 7, "minute": 5, "day": None})
         self.assertEqual(schedule.parse_when(None, ["Friday", "18:30"])["day"], "fri")
@@ -211,6 +212,7 @@ class ScheduleTests(unittest.TestCase):
         (d / f"{schedule.LABEL}.plist").write_bytes(plistlib.dumps(old))
         with mock.patch.object(schedule, "_plist_path", return_value=d / f"{schedule.LABEL}.plist"), \
                 mock.patch.object(schedule.platform, "system", return_value="Darwin"), \
+                mock.patch.object(schedule.os, "getuid", return_value=501, create=True), \
                 mock.patch.object(schedule.subprocess, "run") as run:
             run.return_value.returncode = 0
             self.assertTrue(schedule.repair())
@@ -235,6 +237,7 @@ class ScheduleTests(unittest.TestCase):
             plist.write_bytes(plistlib.dumps(old))
             with mock.patch.object(schedule, "_plist_path", return_value=plist), \
                     mock.patch.object(schedule.platform, "system", return_value="Darwin"), \
+                    mock.patch.object(schedule.os, "getuid", return_value=501, create=True), \
                     mock.patch.object(schedule.subprocess, "run") as run, \
                     mock.patch.object(schedule.sys, "frozen", True, create=True), \
                     mock.patch.object(schedule.sys, "executable", exe), \
