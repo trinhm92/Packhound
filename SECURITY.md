@@ -38,7 +38,9 @@ Security fixes go into the latest release. Please update before reporting.
 
 ## Verifying a download
 
-Every release is built by GitHub Actions from a tagged commit, with hash-locked build dependencies. Each installer comes with:
+Every release is built by GitHub Actions from a tagged commit, with hash-locked build dependencies.
+
+The installers are **not code-signed** (no Apple Developer ID or Windows Authenticode certificate yet), so macOS and Windows warn on first launch. That makes the two checks below the way to know a download is genuine. Each installer comes with:
 
 1. **Checksums.** Download `SHA256SUMS` from the same release, then:
    ```bash
