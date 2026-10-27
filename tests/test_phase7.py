@@ -278,7 +278,8 @@ class ScheduleTests(unittest.TestCase):
                "program": "/usr/bin/python3", "args": ["/usr/bin/python3", "-m", "scs", "watch"]}
         fake = dict(own, label="com.other", path="/Users/x/Library/LaunchAgents/com.other.plist")
         f = persistence.audit_autostart([own, fake])
-        self.assertEqual([x.meta["item"]["label"] for x in f], ["com.other"])  # an imitation is still audited
+        # an imitation is still audited (on Windows it also gets a "missing program" finding)
+        self.assertEqual({x.meta["item"]["label"] for x in f}, {"com.other"})
 
 
 if __name__ == "__main__":

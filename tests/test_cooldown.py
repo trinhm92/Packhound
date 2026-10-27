@@ -78,7 +78,7 @@ class PlanCooldownTests(unittest.TestCase):
                 mock.patch.object(plan, "_pip_cutoff_flag", return_value=" --uploaded-prior-to P7D"):
             t = self.build([(p, [Advisory("GHSA-a", severity="HIGH", fixed=["1.1"])])])["targets"][0]
         self.assertIn("--uploaded-prior-to P7D", t["change"][0])
-        self.assertIn("'aaa>=1.1'", t["change"][0])
+        self.assertIn(plan.q("aaa>=1.1"), t["change"][0])
 
     def test_npm_global_uses_before_and_old_enough_version(self):
         d = Path(tempfile.mkdtemp())
@@ -93,7 +93,7 @@ class PlanCooldownTests(unittest.TestCase):
         p = self.pip_pkg("aaa", "1.0")
         with mock.patch.object(cooldown, "pypi_times", side_effect=AssertionError("no lookups when off")):
             t = self.build([(p, [Advisory("GHSA-a", severity="HIGH", fixed=["1.1"])])], days=0)["targets"][0]
-        self.assertIn("'aaa>=1.1'", t["change"][0])
+        self.assertIn(plan.q("aaa>=1.1"), t["change"][0])
         self.assertFalse(any("age-check" in v for v in t["verify"]))
 
 

@@ -46,7 +46,7 @@ class Cmd:
     name = "cmd"
     devnull = "NUL"
     script_ext = ".cmd"
-    _SAFE = re.compile(r"^[A-Za-z0-9_@+=:,./\\-]+$")
+    _SAFE = re.compile(r"^[A-Za-z0-9_@+=:,./\\~-]+$")  # ~: 8.3 short names (RUNNER~1)
 
     def q(self, s: str) -> str:
         if s and self._SAFE.match(s):

@@ -119,6 +119,8 @@ def ssl_context():
                     ctx.load_verify_locations(cafile=cafile)
                     debug(f"TLS: using CA bundle {cafile}")
                     break
+            if not ctx.cert_store_stats().get("x509_ca") and sys.platform == "win32":
+                ctx.load_default_certs()  # the Windows certificate store
         _ssl_ctx = ctx
     return _ssl_ctx
 
