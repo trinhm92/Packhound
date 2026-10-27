@@ -71,7 +71,7 @@ def _short(p: str) -> str:
 
 
 def _manager(path: str) -> str:
-    rp = os.path.realpath(path)
+    rp = os.path.realpath(path).replace("\\", "/")  # markers below use forward slashes, also on Windows
     for marker, name in (("/.sdkman/", "SDKMAN"), ("/.pyenv/", "pyenv"), ("/.nvm/", "nvm"), ("/.volta/", "Volta"),
                          ("/fnm/", "fnm"), ("/uv/python/", "uv"), ("/.asdf/", "asdf"), ("/mise/", "mise"),
                          ("/Cellar/", "Homebrew"), ("/.gradle/jdks/", "Gradle toolchains"),

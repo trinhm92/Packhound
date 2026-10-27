@@ -105,7 +105,7 @@ def _runtime_steps(name: str, version: str, fix: str, p: dict) -> list[dict]:
         if mgr == "Go toolchain cache":
             steps.append({"text": f"A go.mod asks for this toolchain. Raise it in each project; Go downloads the new one itself.",
                           "cmd": f"go get toolchain@go{fix}"})
-        elif "/sdk/" in loc:
+        elif "/sdk/" in loc.replace("\\", "/"):
             steps.append({"text": f"Install Go {fix} next to it.", "cmd": f"go install golang.org/dl/go{fix}@latest && go{fix} download"})
         else:
             steps.append({"text": f"Download Go {fix} and install it over this one.", "cmd": "", "link": "https://go.dev/dl/"})
