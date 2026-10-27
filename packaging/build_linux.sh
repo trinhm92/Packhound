@@ -10,7 +10,7 @@ PKG="$ROOT/build/linux/scs_${VERSION}_all"
 rm -rf "$PKG" && mkdir -p "$PKG/DEBIAN" "$PKG/opt/scs" "$PKG/usr/bin" "$PKG/usr/share/applications" \
   "$PKG/usr/share/icons/hicolor/scalable/apps"
 
-cp -R scs "$PKG/opt/scs/"
+cp -R scs packhound "$PKG/opt/scs/"
 find "$PKG/opt/scs" -name __pycache__ -prune -exec rm -rf {} +
 cp README.md PLAN.md "$PKG/opt/scs/"
 cp scs/ui/static/icon.svg "$PKG/usr/share/icons/hicolor/scalable/apps/scs.svg"
@@ -23,7 +23,12 @@ cat > "$PKG/usr/bin/scs-gui" <<'EOS'
 #!/bin/sh
 PYTHONPATH=/opt/scs exec python3 -c 'from scs.ui.app import main_gui; main_gui()'
 EOS
-chmod 755 "$PKG/usr/bin/scs" "$PKG/usr/bin/scs-gui"
+cat > "$PKG/usr/bin/packhound" <<'EOS'
+#!/bin/sh
+PYTHONPATH=/opt/scs exec python3 -m packhound "$@"
+EOS
+ln -s scs-gui "$PKG/usr/bin/packhound-gui"
+chmod 755 "$PKG/usr/bin/scs" "$PKG/usr/bin/scs-gui" "$PKG/usr/bin/packhound"
 
 cat > "$PKG/usr/share/applications/scs.desktop" <<EOS
 [Desktop Entry]
@@ -31,7 +36,7 @@ Type=Application
 Name=Packhound
 GenericName=Supply chain security scanner
 Comment=Find vulnerable and malicious software on this computer
-Exec=scs-gui
+Exec=packhound-gui
 Icon=scs
 Terminal=false
 Categories=System;Security;

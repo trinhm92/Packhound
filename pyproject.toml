@@ -1,25 +1,47 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "scs"
+name = "packhound"
 version = "0.1.0"
-description = "Supply chain scanner: package inventory, CVEs, malicious packages, patch advice"
+description = "Supply chain security scanner for developer machines: vulnerable and malicious packages, runtimes, build chain"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = []  # standard library only, by design
+keywords = ["supply-chain-security", "vulnerability-scanner", "malware-detection", "sbom", "devsecops", "osv"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+
+[project.urls]
+Homepage = "https://github.com/trinhm92/Packhound"
+Issues = "https://github.com/trinhm92/Packhound/issues"
+Security = "https://github.com/trinhm92/Packhound/security/policy"
 
 [project.optional-dependencies]
 gui = ["pywebview==6.2.1"]
 
 [project.scripts]
-scs = "scs.cli:main"
+packhound = "scs.cli:main"
+scs = "scs.cli:main"  # original short name, kept as an alias
 
 [project.gui-scripts]
+packhound-gui = "scs.ui.app:main_gui"
 scs-gui = "scs.ui.app:main_gui"
 
 [tool.setuptools.packages.find]
-include = ["scs*"]
+include = ["scs*", "packhound*"]
 
 [tool.setuptools.package-data]
 scs = ["iocs/*.json", "rules/*.yar", "ui/static/*"]

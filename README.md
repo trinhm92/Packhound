@@ -1,34 +1,78 @@
-# Packhound
+<p align="center">
+  <img src="scs/ui/static/icon.svg" alt="Packhound" width="120">
+</p>
 
-<img src="scs/ui/static/icon.svg" alt="Packhound icon" width="128" align="right">
+<h1 align="center">Packhound</h1>
 
-**Packhound sniffs out the bad packages in your software supply chain.** The desktop app is Packhound; the engine and command line are `scs`.
+<p align="center"><b>Sniffs out the bad packages on your developer machine, not just in your lockfile.</b></p>
+
+<p align="center">
+  <a href="https://github.com/trinhm92/Packhound/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/trinhm92/Packhound/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/trinhm92/Packhound/releases"><img alt="Release" src="https://img.shields.io/github/v/release/trinhm92/Packhound?include_prereleases"></a>
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Ubuntu%20%7C%20Windows-lightgrey">
+  <img alt="Dependencies: none" src="https://img.shields.io/badge/runtime%20dependencies-none-brightgreen">
+</p>
 
 Packhound is a supply chain security scanner for developer machines on macOS, Ubuntu and Windows. It checks your apps, language packages, Java libraries, JDK/Node/Python/Go installs and git for known vulnerabilities and malicious packages. It also catches tampered build wrappers and risky CI workflows, and fixes what it safely can.
 
-## Get started
+<p align="center"><img src="docs/screenshots/home.png" alt="Packhound home screen: health status, action groups and what is checked" width="820"></p>
 
-Needs Python 3.10 or newer; the scanner itself uses only the standard library.
+## Why Packhound
+
+Most dependency scanners read one project's lockfile. Attacks like the npm worms of 2025 or a swapped `gradle-wrapper.jar` land on the **developer's machine**: in global tools, editor extensions, start-up items, build caches and the runtimes themselves. Packhound looks at all of it.
+
+| | Project scanners | Packhound |
+|---|---|---|
+| Project lockfiles (npm, PyPI, Go, Rust, Ruby, PHP, Java, .NET) | ✅ | ✅ |
+| Globally installed tools: Homebrew, APT/Snap, winget/Chocolatey/Scoop, npm -g, pipx, cargo | — | ✅ |
+| Runtimes (JDK, Node.js, Python, Go): end of life, missed security updates | — | ✅ |
+| Java libraries in the Maven/Gradle caches, OS-bundled git/curl/OpenSSH | — | ✅ |
+| Known-malicious packages plus install scripts, start-up items, extensions | partly | ✅ |
+| Gradle/Maven wrapper checksums, unpinned GitHub Actions | — | ✅ |
+| Fixes with snapshot, verification and automatic rollback | — | ✅ |
+| Plain-language desktop app for non-specialists | — | ✅ |
+
+**Built to be trusted:** the scanner uses only the Python standard library, never runs the code it inventories, reads before it changes anything, and sends only package names and versions to [OSV.dev](https://osv.dev). Its own releases are built in CI from hash-locked dependencies, with [signed provenance](SECURITY.md#verifying-a-download).
+
+## Highlights
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/findings.png" alt="Findings with step-by-step fixes"></td>
+<td width="50%"><img src="docs/screenshots/malware.png" alt="Malware check results"></td>
+</tr>
+<tr>
+<td><b>Every finding says what to do.</b> Four groups (Act now, Safe to update, Check before updating, No automatic fix), and copy-paste steps for what can't be fixed automatically.</td>
+<td><b>Malware and tampering checks.</b> Malicious install scripts, persistence, risky extensions, a Gradle wrapper that matches no release, CI actions not pinned to a commit.</td>
+</tr>
+</table>
+
+- **Act on what matters:** exploited-in-the-wild (CISA KEV) and exploit-probability (EPSS) signals, dependency chains, toolchain conflicts.
+- **Fix safely:** one click updates the low-risk items; each change is snapshotted, tested and undone automatically if a test fails. New releases wait a few days first (release-age cooldown), so a freshly hijacked version isn't installed.
+- **Keep watching:** a daily schedule with desktop, Slack, Teams, webhook or email alerts, and a merged report for several machines.
+
+## Install
+
+**Desktop app:** download the macOS `.dmg`, Windows installer or Ubuntu `.deb` from [Releases](https://github.com/trinhm92/Packhound/releases), and check it against `SHA256SUMS` (see [verifying a download](SECURITY.md#verifying-a-download)).
+
+**Command line** (Python 3.10+, no dependencies):
 
 ```bash
-git clone https://github.com/trinhm92/Packhound.git
-cd Packhound
-python3 -m scs scan --root ~/code    # read-only scan of this machine plus the projects under ~/code
-python3 -m scs ui                    # or use the desktop app
+pipx install git+https://github.com/trinhm92/Packhound.git
+packhound scan --root ~/code     # read-only scan of this machine plus the projects under ~/code
+packhound ui                     # the desktop app in your browser
 ```
 
-Installers (macOS .dmg, Ubuntu .deb, Windows setup) are built with the scripts in [packaging/](packaging/).
+Or from a clone: `python3 -m packhound scan`. The command is also available under its original short name, `scs`.
 
-
-Scans the packages installed on a machine and in your projects. It finds known vulnerabilities (CVE/GHSA) and **known-malicious packages**, then sorts each finding into one of four action buckets: **Respond now · Patch now · Verify first · Monitor**, with suggested commands.
-
-`scan` only reads. Nothing is installed or changed. See [PLAN.md](PLAN.md) for the roadmap. All seven phases are implemented: macOS, Ubuntu/Debian, Windows, a merged multi-host report, and continuous monitoring with alerts.
+`scan` only reads; nothing is installed or changed. Findings land in four action groups (**Act now · Safe to update · Check before updating · No automatic fix**), each with suggested commands. See [PLAN.md](PLAN.md) for the design and roadmap, and [CONTRIBUTING.md](CONTRIBUTING.md) to get involved.
 
 ## Desktop app (for non-technical users)
 
 ```bash
-python3 -m scs ui                 # opens the app (native window if pywebview is installed, otherwise your browser)
-python3 -m scs ui --browser       # always use the browser
+packhound ui                 # opens the app (native window if pywebview is installed, otherwise your browser)
+packhound ui --browser       # always use the browser
 pip install -r requirements-gui.txt   # optional: native window (pywebview, pinned)
 ```
 
@@ -66,7 +110,7 @@ Build dependencies are hash-locked: see [Security of scs itself](#security-of-sc
    - the Ubuntu `.deb`.
 
    Each installer is smoke-tested on a real machine. The app runs a headless `--watch` on both macOS architectures and on Windows, and the `.deb` is installed and its UI server probed.
-3. **Release:** on a tag `v*`, all installers plus `SHA256SUMS` go into a **draft** GitHub release for you to review.
+3. **Release:** on a tag `v*`, all installers plus `SHA256SUMS` go into a **draft** GitHub release for you to review. Each file gets a signed build-provenance attestation, which anyone can check with `gh attestation verify <file> --repo trinhm92/Packhound` (see [SECURITY.md](SECURITY.md#verifying-a-download)).
 
 ```bash
 git tag v0.1.0 && git push origin main v0.1.0
@@ -94,25 +138,25 @@ scs scan  →  scs triage  →  scs plan  →  (review, run target by target)  �
 ```
 
 ```bash
-python3 -m scs scan --root ~/RnD                 # system packages + projects under ~/RnD
-python3 -m scs triage                            # decide per finding: patch now / verify first / defer / ignore
-python3 -m scs plan                              # dry-run patch plan (.md + guarded .sh + .json)
+packhound scan --root ~/RnD                 # system packages + projects under ~/RnD
+packhound triage                            # decide per finding: patch now / verify first / defer / ignore
+packhound plan                              # dry-run patch plan (.md + guarded .sh + .json)
 ```
 
 **Other commands:**
 
 ```bash
-python3 -m scs scan --root ~/RnD --nvd           # also match Homebrew formulae against NVD (slow, low confidence)
-python3 -m scs scan --offline                    # cached data only, nothing sent over the network
-python3 -m scs scan --fail-on high --format ''   # CI / cron: exit 2 on HIGH+ findings
-python3 -m scs triage --bucket respond --bucket patch   # triage only some buckets
-python3 -m scs triage --auto                     # accept suggested actions (never ignores or defers)
-python3 -m scs plan --suggested                  # include untriaged findings using their suggested bucket
-python3 -m scs ignore GHSA-xxxx --package npm:qs --reason "dev-only, not reachable" --expires 60d
-python3 -m scs policy [--prune]                  # list ignore rules / drop expired ones
-python3 -m scs report                            # re-render the latest scan
-python3 -m scs history                           # past scans
-python3 -m scs collectors                        # which collectors apply on this machine
+packhound scan --root ~/RnD --nvd           # also match Homebrew formulae against NVD (slow, low confidence)
+packhound scan --offline                    # cached data only, nothing sent over the network
+packhound scan --fail-on high --format ''   # CI / cron: exit 2 on HIGH+ findings
+packhound triage --bucket respond --bucket patch   # triage only some buckets
+packhound triage --auto                     # accept suggested actions (never ignores or defers)
+packhound plan --suggested                  # include untriaged findings using their suggested bucket
+packhound ignore GHSA-xxxx --package npm:qs --reason "dev-only, not reachable" --expires 60d
+packhound policy [--prune]                  # list ignore rules / drop expired ones
+packhound report                            # re-render the latest scan
+packhound history                           # past scans
+packhound collectors                        # which collectors apply on this machine
 ```
 
 ### What triage and plan add (Phase 2)
@@ -159,12 +203,12 @@ Run it the same way with the Python from python.org or the Microsoft Store (`py 
 ## Continuous monitoring (Phase 7)
 
 ```bash
-python3 -m scs schedule print --daily 09:00 --root ~/RnD    # preview the LaunchAgent / systemd timer / scheduled task
-python3 -m scs schedule install --daily 09:00 --root ~/RnD  # install it (status | remove)
-python3 -m scs watch --root ~/RnD                           # what the schedule runs; exit 2 when it alerts
-python3 -m scs watch --test-alert                           # check your notification channels
-python3 -m scs alerts                                       # recent alerts
-python3 -m scs malware --reputation                         # opt-in hash reputation for one malware run
+packhound schedule print --daily 09:00 --root ~/RnD    # preview the LaunchAgent / systemd timer / scheduled task
+packhound schedule install --daily 09:00 --root ~/RnD  # install it (status | remove)
+packhound watch --root ~/RnD                           # what the schedule runs; exit 2 when it alerts
+packhound watch --test-alert                           # check your notification channels
+packhound alerts                                       # recent alerts
+packhound malware --reputation                         # opt-in hash reputation for one malware run
 ```
 
 - **`scs watch`.** Each run does a vulnerability scan plus a quick malware check (install-time code, persistence, extensions; `--malware full|none`). It alerts on:
@@ -203,11 +247,11 @@ python3 -m scs malware --reputation                         # opt-in hash reputa
 
 ```bash
 # on each machine (macOS, Ubuntu, Windows), after `scs scan` and optionally `scs malware`
-python3 -m scs export --out "$(hostname).json"
+packhound export --out "$(hostname).json"
 # or collect over SSH
-ssh build-01 'cd ~/scs && python3 -m scs scan --format "" >/dev/null && python3 -m scs export' > build-01.json
+ssh build-01 'cd ~/scs && packhound scan --format "" >/dev/null && packhound export' > build-01.json
 
-python3 -m scs merge --dir ./bundles             # fleet HTML + JSON; exit 2 if any host has a respond-now item
+packhound merge --dir ./bundles             # fleet HTML + JSON; exit 2 if any host has a respond-now item
 ```
 
 Bundles contain findings, summaries, malware results and exposure *locations*. The full package inventory stays on the machine, and home-directory paths become `~`. The fleet report shows:
@@ -239,13 +283,13 @@ The same commands work on Ubuntu and Debian, including derivatives such as Mint 
 ## Applying fixes (Phase 4)
 
 ```bash
-python3 -m scs patch                             # list the plan's targets
-python3 -m scs patch --all --dry-run             # preflight every target, change nothing
-python3 -m scs patch --target 2                  # apply one target (asks before running)
-python3 -m scs patch --target 2 --target 5 --yes # no prompts for targets without risks
-python3 -m scs patch --all --yes --accept-risk --keep-going
-python3 -m scs verify --target 7                 # run just the verification commands
-python3 -m scs patch --history                   # previous runs
+packhound patch                             # list the plan's targets
+packhound patch --all --dry-run             # preflight every target, change nothing
+packhound patch --target 2                  # apply one target (asks before running)
+packhound patch --target 2 --target 5 --yes # no prompts for targets without risks
+packhound patch --all --yes --accept-risk --keep-going
+packhound verify --target 7                 # run just the verification commands
+packhound patch --history                   # previous runs
 ```
 
 For each target, `scs patch` does the following:
@@ -285,11 +329,11 @@ Every step is written to `~/.local/share/scs/runs/<id>/journal.json`, with a log
 ## Malware / compromise checks (Phase 3)
 
 ```bash
-python3 -m scs malware --root ~/RnD              # all checks (~2–3 min; signatures and pip hashing dominate)
-python3 -m scs malware --only persistence,extensions,exposure   # quick daily check (~10 s)
-python3 -m scs malware --fail-on high --format ''               # cron/CI: exit 2 on high+
-python3 -m scs quarantine <path> --reason "..."  # move aside (never deletes), strips exec bits
-python3 -m scs quarantine --list | --restore <id>
+packhound malware --root ~/RnD              # all checks (~2–3 min; signatures and pip hashing dominate)
+packhound malware --only persistence,extensions,exposure   # quick daily check (~10 s)
+packhound malware --fail-on high --format ''               # cron/CI: exit 2 on high+
+packhound quarantine <path> --reason "..."  # move aside (never deletes), strips exec bits
+packhound quarantine --list | --restore <id>
 ```
 
 | Check | What it looks at |

@@ -1,0 +1,48 @@
+name: False positive / missed finding
+description: Packhound flagged something that isn't a problem, or missed one it should have found.
+labels: [detection]
+body:
+  - type: markdown
+    attributes:
+      value: "**Remove private paths and project names before posting.** Suspect real malware on your machine? Follow the Act now steps first."
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of problem
+      options:
+        - Reported a vulnerability that doesn't apply (false positive)
+        - Missed a known vulnerability or malicious package
+        - Malware check flagged something harmless
+        - Wrong fix version or wrong fix steps
+    validations:
+      required: true
+  - type: input
+    id: package
+    attributes:
+      label: Package, version and ecosystem
+      placeholder: "e.g. lodash 4.17.20 (npm), log4j-core 2.14.1 (Maven), Python 3.12.1 (runtime)"
+    validations:
+      required: true
+  - type: input
+    id: advisory
+    attributes:
+      label: Advisory or rule
+      description: The id shown under Technical details (GHSA-…, CVE-…, EOL-…, or a malware rule such as ACTION_NOT_PINNED).
+  - type: textarea
+    id: where
+    attributes:
+      label: Where it was found
+      description: The kind of location (project lockfile, Homebrew, pipx, Gradle cache, …) and the relevant lines, without private names.
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it's wrong
+      description: Links to the advisory, changelog or vendor notice that show it.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Packhound version
+    validations:
+      required: true

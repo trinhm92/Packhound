@@ -1,0 +1,48 @@
+name: Bug report
+description: Something doesn't work as it should (a crash, a wrong command, a broken screen).
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Security vulnerabilities go to the private form linked on the previous page instead.
+        **Before you paste output, remove private paths, user names, project names and tokens.**
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. packhound scan --root ~/code
+        2. ...
+  - type: textarea
+    id: output
+    attributes:
+      label: Error output
+      description: Command output or the error shown in the app. Running with `-v` (`packhound -v scan …`) gives more detail.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Packhound version
+      description: "`packhound --version`, or the version at the bottom of the app's sidebar."
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Ubuntu / Debian, Windows, Other Linux]
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How do you run it?
+      options: [Desktop app (installer), Command line (pipx / pip), From a git clone]

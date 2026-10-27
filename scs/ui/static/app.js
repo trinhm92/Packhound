@@ -2,11 +2,14 @@
 "use strict";
 
 // ---------------------------------------------------------------- token + API
+// optional deep link next to the token: #token=…&page=findings&tab=wait
+const START = { page: (location.hash.match(/[&]page=(\w+)/) || [])[1] || "home",
+                tab: (location.hash.match(/[&]tab=(act|update|check|wait)\b/) || [])[1] || "act" };
 const TOKEN = (() => {
   const m = location.hash.match(/token=([\w-]+)/);
   if (m) {
     try { sessionStorage.setItem("scs-token", m[1]); } catch (e) { /* storage may be unavailable */ }
-    history.replaceState(null, "", location.pathname + "#/home");
+    history.replaceState(null, "", location.pathname + "#/" + START.page);
     return m[1];
   }
   try { return sessionStorage.getItem("scs-token") || ""; } catch (e) { return ""; }
@@ -36,7 +39,7 @@ const when = (iso) => {
   if (mins < 60 * 24) return `${Math.round(mins / 60)} h ago`;
   return d.toLocaleDateString();
 };
-let STATE = { status: null, findings: null, malware: null, tab: "act", search: "", plan: null };
+let STATE = { status: null, findings: null, malware: null, tab: START.tab, search: "", plan: null };
 
 // ---------------------------------------------------------------- jobs (bottom bar)
 let jobTimer = null;
@@ -143,7 +146,7 @@ async function refresh() {
   $("#nav-findings").textContent = n ? n : "";
   const m = s.malware_counts || {};
   $("#nav-malware").textContent = (m.critical || 0) + (m.high || 0) || "";
-  $("#side-foot").innerHTML = `${esc(s.host)}<br>scs ${esc(s.version)}`;
+  $("#side-foot").innerHTML = `${esc(s.host)}<br>Packhound ${esc(s.version)}`;
   STATE.findings = null;
   STATE.malware = null;
   render();
