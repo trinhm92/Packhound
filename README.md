@@ -54,7 +54,14 @@ Most dependency scanners read one project's lockfile. Attacks like the npm worms
 
 ## Install
 
-**Desktop app:** download the macOS `.dmg`, Windows installer or Ubuntu `.deb` from [Releases](https://github.com/trinhm92/Packhound/releases), and check it against `SHA256SUMS` (see [verifying a download](SECURITY.md#verifying-a-download)).
+**Desktop app:** download the macOS `.dmg`, Windows installer or Ubuntu `.deb` from [Releases](https://github.com/trinhm92/Packhound/releases), and check it against `SHA256SUMS` and its build provenance (see [verifying a download](SECURITY.md#verifying-a-download)).
+
+> **The installers are not code-signed yet**, so the first launch shows a warning:
+> - **macOS:** "Packhound can't be opened". Open **System Settings › Privacy & Security**, scroll down and click **Open Anyway** (once).
+> - **Windows:** SmartScreen says "Windows protected your PC". Click **More info › Run anyway**.
+> - **Ubuntu:** no warning; `.deb` files are installed with `sudo apt install ./scs_*_all.deb`.
+>
+> Verify the download first: the checksum and the signed provenance prove it was built by this repository's CI.
 
 **Command line** (Python 3.10+, no dependencies):
 
