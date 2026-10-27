@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Packhound</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="/icon-small.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="shell">
+  <nav class="side" aria-label="Main">
+    <div class="brand"><img src="/icon-small.svg" alt="" width="32" height="32"><span>Packhound<small>supply chain security</small></span></div>
+    <a href="#/home" data-page="home">Home</a>
+    <a href="#/findings" data-page="findings">Findings <span class="pill" id="nav-findings"></span></a>
+    <a href="#/fix" data-page="fix">Fix</a>
+    <a href="#/malware" data-page="malware">Malware check <span class="pill warn" id="nav-malware"></span></a>
+    <a href="#/settings" data-page="settings">Settings</a>
+    <div class="side-foot" id="side-foot"></div>
+  </nav>
+  <main id="main" tabindex="-1"><p class="muted">Loading…</p></main>
+</div>
+<div class="jobbar hidden" id="jobbar" role="status" aria-live="polite">
+  <div class="spinner" aria-hidden="true"></div>
+  <div class="jobtext"><b id="job-title"></b><span id="job-line" class="muted"></span></div>
+  <div class="row"><button class="hidden" id="job-cancel" type="button">Cancel</button>
+  <button class="link" id="job-toggle" type="button">Show details</button></div>
+  <pre id="job-log" class="hidden"></pre>
+</div>
+<dialog id="dialog"><form method="dialog" id="dialog-form"></form></dialog>
+<script src="/app.js"></script>
+</body>
+</html>

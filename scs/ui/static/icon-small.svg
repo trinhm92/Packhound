@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 824 824">
+<!-- Packhound (small sizes): a hound that sniffs out the bad package in your supply chain -->
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#11204A"/><stop offset="1" stop-color="#050913"/>
+  </linearGradient>
+  <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse" x="12" y="12">
+    <path d="M64 0 H0 V64" fill="none" stroke="#1E2E5C" stroke-width="3"/>
+  </pattern>
+  <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+    <feGaussianBlur stdDeviation="12" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+<g clip-path="url(#tile)">
+  
+  <g filter="url(#glow)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M292 470 C282 372 330 284 428 266 C492 254 548 274 578 318 C616 372 682 446 734 524 C760 566 752 614 714 626 C680 644 642 652 612 664 C590 692 546 702 520 686 C512 680 508 672 506 664 C494 700 500 768 520 826 C540 884 570 926 600 980 L210 980 C226 820 262 620 292 470 Z" fill="#0B1430" stroke="#4FF0D4" stroke-width="30"/>
+    <path d="M384 292 C322 300 288 372 292 472 C296 580 314 652 354 698 C384 730 428 714 430 672 C434 592 432 470 426 388 C422 334 410 294 384 292 Z" fill="#0B1430" stroke="#4FF0D4" stroke-width="30"/>
+    <path d="M708 556 C744 548 770 574 762 606 C756 628 728 634 708 624 C688 612 684 566 708 556 Z" fill="#4FF0D4"/>
+    <circle cx="528" cy="360" r="26" fill="#4FF0D4"/>
+    
+    <g stroke="#FF5A6E" stroke-width="30">
+      <path d="M650 706 L770 664 L890 706 L770 748 Z"/>
+      <path d="M650 706 L650 820 L770 862 L890 820 L890 706"/>
+      <path d="M770 748 V862"/>
+    </g>
+  </g>
+  <circle cx="846" cy="652" r="60" fill="#FF5A6E" stroke="#050913" stroke-width="12"/>
+  <rect x="837" y="616" width="18" height="46" rx="9" fill="#FFFFFF"/>
+  <circle cx="846" cy="686" r="10" fill="#FFFFFF"/>
+</g>
+</svg>

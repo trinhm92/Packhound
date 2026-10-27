@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build output and installers
+build/
+dist/
+*.dmg
+*.deb
+*.msi
+*.zip
+
+# Local scan output
+reports/
+
+# Secrets and signing material (never commit)
+scs.json
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.mobileprovision
+
+# Editors, OS and tools
+.DS_Store
+.idea/
+.vscode/
+.claude/

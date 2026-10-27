@@ -1,0 +1,16 @@
+# Keep pinned actions and build dependencies current, but never adopt a release on day one:
+# a cooldown gives the ecosystem time to catch compromised versions (the same rule scs applies).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+  - package-ecosystem: pip
+    directories: ["/", "/packaging"]
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14

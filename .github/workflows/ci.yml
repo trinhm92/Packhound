@@ -1,0 +1,227 @@
+# Tests on macOS / Ubuntu / Windows, builds the three installers, publishes them on version tags.
+# Supply-chain hygiene: actions pinned to full commit SHAs (Dependabot updates them after a cooldown),
+# read-only token by default, no pull_request_target, checkout without persisted credentials,
+# downloaded toolchains verified (hash + signature) before use, signing secrets optional.
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+  # python.org universal2 installer used for the macOS app (Intel + Apple Silicon)
+  MAC_PY_VERSION: "3.13.17"
+  MAC_PY_SHA256: "3053592af66128269efab37fe7851a4894920b27c442aeec99ce4d34d17c07e3"
+  MAC_PY_SIGNER: "Developer ID Installer: Python Software Foundation (BMM5U3QVKW)"
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        python: ["3.10", "3.13"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit tests (standard library only, nothing to install)
+        run: python -m unittest discover -s tests -v
+      - name: CLI smoke test
+        run: |
+          python -m scs --version
+          python -m scs collectors
+          python -m scs scan --format "" --no-save --only pip --limit 3
+
+  build-macos:
+    needs: test
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      HAS_MAC_CERT: ${{ secrets.MACOS_CERT_P12 != '' }}
+      HAS_NOTARY: ${{ secrets.APPLE_ID != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install universal2 Python from python.org (hash + signature checked)
+        run: |
+          pkg="python-${MAC_PY_VERSION}-macos11.pkg"
+          curl -sSfLO "https://www.python.org/ftp/python/${MAC_PY_VERSION}/${pkg}"
+          echo "${MAC_PY_SHA256}  ${pkg}" | shasum -a 256 -c -
+          pkgutil --check-signature "${pkg}" | grep -F "${MAC_PY_SIGNER}"
+          sudo installer -pkg "${pkg}" -target /
+          lipo -archs "/Library/Frameworks/Python.framework/Versions/${MAC_PY_VERSION%.*}/bin/python${MAC_PY_VERSION%.*}"
+      - name: Import signing certificate (only if configured)
+        if: env.HAS_MAC_CERT == 'true'
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          kc="$RUNNER_TEMP/build.keychain-db"; kcpw=$(uuidgen)
+          security create-keychain -p "$kcpw" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$kcpw" "$kc"
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kcpw" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+      - name: Store notarization credentials (only if configured)
+        if: env.HAS_NOTARY == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: xcrun notarytool store-credentials scs-notary --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+      - name: Build universal2 app + DMG
+        env:
+          CODESIGN_IDENTITY: ${{ env.HAS_MAC_CERT == 'true' && secrets.MACOS_SIGN_IDENTITY || '' }}
+          NOTARY_PROFILE: ${{ env.HAS_NOTARY == 'true' && 'scs-notary' || '' }}
+        run: packaging/build_macos.sh
+      - name: Smoke test the app on both architectures (headless --watch)
+        run: |
+          bin="build/macos/dist/Packhound.app/Contents/MacOS/Packhound"
+          export XDG_DATA_HOME="$RUNNER_TEMP/scs-data"
+          for a in arm64 x86_64; do
+            if [ "$a" = x86_64 ] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then echo "::notice::Rosetta not available, x86_64 smoke test skipped"; continue; fi
+            rc=0; arch -$a "$bin" --watch --malware none --no-notify || rc=$?
+            echo "$a exit code: $rc"; [ "$rc" = 0 ] || [ "$rc" = 2 ]   # 2 = alerts found, still a successful run
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos
+          path: |
+            build/macos/*.dmg
+            build/macos/*.sha256
+            build/macos/build-requirements.lock.txt
+          if-no-files-found: error
+
+  build-windows:
+    needs: test
+    runs-on: windows-2025
+    timeout-minutes: 45
+    env:
+      HAS_WIN_CERT: ${{ secrets.WINDOWS_CERT_PFX != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: py
+        with:
+          python-version: "3.13"
+          architecture: x64
+      - name: Put Inno Setup on PATH (preinstalled on GitHub's Windows images)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6"
+          if (Test-Path "$iscc\ISCC.exe") { $iscc | Out-File -Append -Encoding utf8 $env:GITHUB_PATH }
+          else { Write-Host "::notice::Inno Setup not found; only the zip will be built" }
+      - name: Import code-signing certificate (only if configured)
+        if: env.HAS_WIN_CERT == 'true'
+        shell: pwsh
+        env:
+          CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT_PFX))
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString $env:CERT_PASSWORD -AsPlainText -Force)
+          Remove-Item $pfx
+          "SIGN_CERT_THUMBPRINT=$($cert.Thumbprint)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          $signtool.DirectoryName | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Build app, zip and installer
+        shell: pwsh
+        env:
+          PYTHON: ${{ steps.py.outputs.python-path }}
+        run: ./packaging/build_windows.ps1
+      - name: Smoke test the app (headless --watch)
+        shell: pwsh
+        run: |
+          $env:XDG_DATA_HOME = Join-Path $env:RUNNER_TEMP "scs-data"
+          $exe = Resolve-Path "build\windows\dist\Packhound\Packhound.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--watch", "--malware", "none", "--no-notify" -Wait -PassThru -NoNewWindow
+          Write-Host "exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 2) { exit 1 }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows
+          path: |
+            build/windows/*.zip
+            build/windows/*-setup.exe
+            build/windows/*.sha256
+            build/windows/build-requirements.lock.txt
+          if-no-files-found: warn
+
+  build-linux:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build .deb
+        run: packaging/build_linux.sh
+      - name: Install and smoke test the package
+        run: |
+          sudo apt-get install -y ./build/linux/scs_*_all.deb desktop-file-utils
+          desktop-file-validate /usr/share/applications/scs.desktop
+          scs --version
+          scs collectors
+          XDG_DATA_HOME="$RUNNER_TEMP/scs-data" scs scan --format "" --no-save --only apt --limit 3
+          # the GUI server: page loads, API refuses requests without the token
+          scs ui --browser --no-open --port 8777 > "$RUNNER_TEMP/ui.log" 2>&1 &
+          for i in $(seq 1 20); do curl -fs -o /dev/null http://127.0.0.1:8777/ && break; sleep 1; done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8777/)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8777/api/status)" = 403
+          kill %1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux
+          path: |
+            build/linux/*.deb
+            build/linux/*.sha256
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # only this job can create the release
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum *.dmg *.zip *.deb *-setup.exe 2>/dev/null > SHA256SUMS && cat SHA256SUMS
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          draft: true   # review before publishing
+          files: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*-setup.exe
+            dist/*.deb
+            dist/SHA256SUMS

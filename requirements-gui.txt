@@ -1,0 +1,3 @@
+# Native window for `scs ui` / the desktop app. Pinned; released 2026-04 (well past a cooldown window).
+# The rest of scs needs only the Python standard library.
+pywebview==6.2.1

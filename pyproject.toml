@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scs"
+version = "0.1.0"
+description = "Supply chain scanner: package inventory, CVEs, malicious packages, patch advice"
+requires-python = ">=3.10"
+dependencies = []  # standard library only, by design
+
+[project.optional-dependencies]
+gui = ["pywebview==6.2.1"]
+
+[project.scripts]
+scs = "scs.cli:main"
+
+[project.gui-scripts]
+scs-gui = "scs.ui.app:main_gui"
+
+[tool.setuptools.packages.find]
+include = ["scs*"]
+
+[tool.setuptools.package-data]
+scs = ["iocs/*.json", "rules/*.yar", "ui/static/*"]

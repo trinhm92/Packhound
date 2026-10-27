@@ -1,0 +1,265 @@
+[
+  {
+    "id": "npm-chalk-debug-2025-09",
+    "name": "npm maintainer account compromise: chalk/debug ecosystem (Sep 2025)",
+    "description": "Phished maintainer account published versions with a crypto-wallet-hijacking payload that runs in browsers.",
+    "severity": "CRITICAL",
+    "references": [
+      "https://osv.dev/list?q=MAL-2025&ecosystem=npm"
+    ],
+    "packages": [
+      {
+        "ecosystem": "npm",
+        "name": "chalk",
+        "versions": [
+          "5.6.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "debug",
+        "versions": [
+          "4.4.2"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "ansi-styles",
+        "versions": [
+          "6.2.2"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "supports-color",
+        "versions": [
+          "10.2.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "strip-ansi",
+        "versions": [
+          "7.1.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "ansi-regex",
+        "versions": [
+          "6.2.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "wrap-ansi",
+        "versions": [
+          "9.0.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "color-convert",
+        "versions": [
+          "3.1.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "color-name",
+        "versions": [
+          "2.0.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "is-arrayish",
+        "versions": [
+          "0.3.3"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "slice-ansi",
+        "versions": [
+          "7.1.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "color",
+        "versions": [
+          "5.0.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "color-string",
+        "versions": [
+          "2.1.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "simple-swizzle",
+        "versions": [
+          "0.2.3"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "supports-hyperlinks",
+        "versions": [
+          "4.1.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "has-ansi",
+        "versions": [
+          "6.0.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "chalk-template",
+        "versions": [
+          "1.1.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "backslash",
+        "versions": [
+          "0.2.1"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "error-ex",
+        "versions": [
+          "1.3.3"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "npm-shai-hulud-2025",
+    "name": "Shai-Hulud self-replicating npm worm (2025)",
+    "description": "Worm that steals npm/GitHub/cloud tokens with TruffleHog, republishes infected packages and adds a GitHub Actions workflow to exfiltrate secrets.",
+    "severity": "CRITICAL",
+    "references": [
+      "https://osv.dev/list?q=MAL-2025&ecosystem=npm"
+    ],
+    "files": [
+      ".github/workflows/shai-hulud-workflow.yml"
+    ]
+  },
+  {
+    "id": "npm-shai-hulud-2-2025-11",
+    "name": "Shai-Hulud 2.0 (\"Sha1-Hulud\") npm worm (Nov 2025)",
+    "description": "Second wave: preinstall hook drops a Bun-based payload that steals developer and CI secrets and republishes packages.",
+    "severity": "CRITICAL",
+    "references": [
+      "https://osv.dev/list?q=MAL-2025&ecosystem=npm"
+    ],
+    "filenames": [
+      "setup_bun.js",
+      "bun_environment.js"
+    ]
+  },
+  {
+    "id": "npm-ua-parser-js-2021-10",
+    "name": "ua-parser-js hijack: cryptominer + password stealer (Oct 2021)",
+    "severity": "CRITICAL",
+    "references": [
+      "https://github.com/advisories/GHSA-pjwm-rvh2-c87w"
+    ],
+    "packages": [
+      {
+        "ecosystem": "npm",
+        "name": "ua-parser-js",
+        "versions": [
+          "0.7.29",
+          "0.8.0",
+          "1.0.0"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "npm-coa-rc-2021-11",
+    "name": "coa / rc hijack: password stealer (Nov 2021)",
+    "severity": "CRITICAL",
+    "references": [
+      "https://github.com/advisories/GHSA-73qr-pfmq-6rp8",
+      "https://github.com/advisories/GHSA-g2q5-5433-rhrf"
+    ],
+    "packages": [
+      {
+        "ecosystem": "npm",
+        "name": "coa",
+        "versions": [
+          "2.0.3",
+          "2.0.4",
+          "2.1.1",
+          "2.1.3",
+          "3.0.1",
+          "3.1.3"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "rc",
+        "versions": [
+          "1.2.9",
+          "1.3.9",
+          "2.3.9"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "npm-event-stream-2018",
+    "name": "event-stream / flatmap-stream backdoor targeting bitcoin wallets (2018)",
+    "severity": "CRITICAL",
+    "references": [
+      "https://github.com/advisories/GHSA-mh6f-8j2x-4483"
+    ],
+    "packages": [
+      {
+        "ecosystem": "npm",
+        "name": "event-stream",
+        "versions": [
+          "3.3.6"
+        ]
+      },
+      {
+        "ecosystem": "npm",
+        "name": "flatmap-stream",
+        "versions": [
+          "0.1.1"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "xz-backdoor-2024",
+    "name": "xz-utils backdoor CVE-2024-3094 (Mar 2024)",
+    "description": "Malicious build scripts in the 5.6.0/5.6.1 release tarballs backdoored liblzma (targeting sshd on glibc Linux).",
+    "severity": "CRITICAL",
+    "references": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2024-3094"
+    ],
+    "packages": [
+      {
+        "ecosystem": "Homebrew",
+        "name": "xz",
+        "versions": [
+          "5.6.0",
+          "5.6.1"
+        ]
+      }
+    ]
+  }
+]
