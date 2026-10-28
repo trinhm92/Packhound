@@ -30,6 +30,9 @@ JDK_DOWNLOADS = {
 
 
 def _q(s: str) -> str:
+    """Quote for the user's own shell: cmd/PowerShell on Windows take double quotes, POSIX shells single quotes."""
+    if os.name == "nt":
+        return s if re.fullmatch(r"[\w@%+=:,./\\~-]+", s) else '"' + s.replace('"', '""') + '"'
     return s if re.fullmatch(r"[\w@%+=:,./-]+", s) else "'" + s.replace("'", "'\\''") + "'"
 
 

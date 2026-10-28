@@ -118,7 +118,16 @@ class GlobalToolTests(unittest.TestCase):
         self.assertEqual(got(pkgs), {("RubyGems", "rack", "2.2.3"), ("RubyGems", "nokogiri", "1.15.4"),
                                      ("RubyGems", "json", "2.6.3")})
         rack = next(p for p in pkgs if p.name == "rack").to_dict()
-        self.assertIn("/rbenv/versions/3.2.2/bin/gem install rack -v 2.2.8", handfix.commands("RubyGems", "rack", "2.2.3", "2.2.8", rack)[0])
+        cmd = handfix.commands("RubyGems", "rack", "2.2.3", "2.2.8", rack)[0]
+        self.assertTrue(cmd.startswith(handfix._qp(str(self.d / "rbenv" / "versions" / "3.2.2" / "bin" / "gem"))), cmd)
+        self.assertIn(" install rack -v 2.2.8 && ", cmd)
+
+    def test_quoting_follows_the_shell(self):
+        with mock.patch.object(handfix.os, "name", "nt"):
+            self.assertEqual(handfix._q(r"C:\Ruby33\bin\gem.cmd"), r"C:\Ruby33\bin\gem.cmd")
+            self.assertEqual(handfix._q(r"C:\Program Files\Ruby\gem"), r'"C:\Program Files\Ruby\gem"')
+        with mock.patch.object(handfix.os, "name", "posix"):
+            self.assertEqual(handfix._q("/opt/my ruby/gem"), "'/opt/my ruby/gem'")
 
     def test_dotnet_tools_nuget_cache_corepack(self):
         tool = self.d / ".dotnet" / "tools" / ".store" / "dotnet-ef" / "7.0.0" / "dotnet-ef" / "7.0.0"
