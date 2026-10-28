@@ -575,10 +575,15 @@ def parse_version_catalog(path: Path) -> Parsed:
         else:
             continue
         if name and ver and name.count(":") == 1:
-            p = _pkg("Maven", name, ver, path, direct=True)
-            if path.parent.name == "gradle":  # <project>/gradle/libs.versions.toml
-                p.meta["project"] = str(path.parent.parent)
-            out.append(p)
+            out.append(_pkg("Maven", name, ver, path, direct=True))
+    for entry in (d.get("plugins") or {}).values():  # Gradle plugins (Android Gradle Plugin, Kotlin…) by artifact
+        if isinstance(entry, dict) and plugin_artifact(entry.get("id", "")):
+            ver = resolve(entry.get("version"))
+            if ver:
+                out.append(_pkg("Maven", plugin_artifact(entry["id"]), ver, path, direct=True, dev=True))
+    if path.parent.name == "gradle":  # <project>/gradle/libs.versions.toml
+        for p in out:
+            p.meta["project"] = str(path.parent.parent)
     return out, None
 
 
@@ -641,6 +646,298 @@ def parse_nuget_lock(path: Path) -> Parsed:
     return out, None
 
 
+# ---------------------------------------------------------------- Android build scripts
+
+# Gradle plugin ids -> the Maven artifact that carries their code (and their advisories)
+PLUGIN_ARTIFACTS = {
+    "com.android.application": "com.android.tools.build:gradle", "com.android.library": "com.android.tools.build:gradle",
+    "com.android.test": "com.android.tools.build:gradle", "com.android.dynamic-feature": "com.android.tools.build:gradle",
+    "com.google.gms.google-services": "com.google.gms:google-services",
+    "com.google.firebase.crashlytics": "com.google.firebase:firebase-crashlytics-gradle",
+}
+_GRADLE_CONF = (r"(?:implementation|api|compileOnly|runtimeOnly|classpath|kapt|ksp|annotationProcessor|"
+                r"coreLibraryDesugaring|lintChecks|\w+Implementation|\w+Api|\w+CompileOnly|\w+RuntimeOnly)")
+_GRADLE_DEP = re.compile(_GRADLE_CONF + r"""\s*\(?\s*(?:platform\(\s*)?["']([\w.\-]+):([\w.\-]+):([^"'\s:@]+)["']""")
+_GRADLE_PLUGIN = re.compile(r"""\bid\s*\(?\s*["']([\w.\-]+)["']\s*\)?\s+version\s*\(?\s*["']([^"'\s]+)["']""")
+_GRADLE_VAR = re.compile(r"""^\s*(?:def|val|var|ext\.|extra\[")?\s*["']?([\w]+)["']?\]?\s*=\s*["']([\w.\-+]+)["']""", re.M)
+
+
+def plugin_artifact(plugin_id: str) -> str | None:
+    if plugin_id in PLUGIN_ARTIFACTS:
+        return PLUGIN_ARTIFACTS[plugin_id]
+    if plugin_id.startswith("org.jetbrains.kotlin."):
+        return "org.jetbrains.kotlin:kotlin-gradle-plugin"
+    return None
+
+
+def _gradle_vars(path: Path) -> dict[str, str]:
+    """Version variables from this script, the root build script and gradle.properties above it."""
+    out: dict[str, str] = {}
+    for d in [path.parent, *path.parents][:4][::-1]:  # outermost first; the module's own values win
+        for name in ("gradle.properties", "build.gradle", "build.gradle.kts"):
+            f = d / name
+            if f.is_file():
+                text = f.read_text(encoding="utf-8", errors="replace")
+                if name == "gradle.properties":
+                    out.update(re.findall(r"^\s*([\w.]+)\s*=\s*([\w.\-+]+)\s*$", text, re.M))
+                else:
+                    out.update(_GRADLE_VAR.findall(text))
+    return out
+
+
+def parse_gradle_build(path: Path) -> Parsed:
+    """Dependencies written directly in build.gradle(.kts) (projects without a lockfile or version catalog)."""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    text = re.sub(r"(?m)//.*$", "", text)
+    variables = _gradle_vars(path)
+
+    def resolve(v: str) -> str | None:
+        m = re.fullmatch(r"\$\{?([\w.]+)\}?", v)
+        if m:
+            v = variables.get(m.group(1).split(".")[-1], "")
+        return _maven_version(v) if v and "+" not in v and "$" not in v else None
+
+    out: list[Package] = []
+    seen = set()
+    for m in _GRADLE_DEP.finditer(text):
+        conf = m.group(0).split("(")[0].split()[0]
+        version = resolve(m.group(3))
+        name = f"{m.group(1)}:{m.group(2)}"
+        if version and (name, version) not in seen:
+            seen.add((name, version))
+            out.append(_pkg("Maven", name, version, path, direct=True, dev="test" in conf.lower()))
+    for plugin_id, ver in _GRADLE_PLUGIN.findall(text):
+        art, version = plugin_artifact(plugin_id), resolve(ver)
+        if art and version and (art, version) not in seen:
+            seen.add((art, version))
+            out.append(_pkg("Maven", art, version, path, direct=True, dev=True))  # build tooling
+    return out, None
+
+
+# ---------------------------------------------------------------- Flutter / Dart, iOS (Swift, CocoaPods, Carthage)
+
+def parse_pubspec_lock(path: Path) -> Parsed:
+    d = miniyaml.loads(path.read_text(encoding="utf-8"))
+    out: list[Package] = []
+    for name, info in (d.get("packages") or {}).items():
+        if not isinstance(info, dict) or info.get("source") != "hosted" or not info.get("version"):
+            continue  # sdk / path / git packages are not on pub.dev
+        dep = str(info.get("dependency", ""))
+        out.append(_pkg("Pub", name, str(info["version"]), path, direct=dep.startswith("direct"), dev=dep == "direct dev"))
+    return out, None
+
+
+def swift_url(location: str) -> str:
+    """Repository URL -> OSV SwiftURL package name: 'https://github.com/apple/swift-nio.git' -> 'github.com/apple/swift-nio'."""
+    loc = re.sub(r"^git@([^:]+):", r"\1/", location.strip())
+    loc = re.sub(r"^[a-z+]+://", "", loc)
+    loc = re.sub(r"^[^@/]+@", "", loc)  # user@host
+    return re.sub(r"\.git$", "", loc.rstrip("/"))
+
+
+def parse_package_resolved(path: Path) -> Parsed:
+    """Swift Package Manager Package.resolved (format 1, 2 and 3)."""
+    d = json.loads(path.read_text(encoding="utf-8"))
+    pins = d.get("pins") or (d.get("object") or {}).get("pins") or []
+    out: list[Package] = []
+    for p in pins:
+        loc, version = p.get("location") or p.get("repositoryURL") or "", (p.get("state") or {}).get("version")
+        if loc and version and p.get("kind", "remoteSourceControl") == "remoteSourceControl":
+            out.append(_pkg("SwiftURL", swift_url(loc), version, path))
+    return out, None
+
+
+def parse_cartfile_resolved(path: Path) -> Parsed:
+    out: list[Package] = []
+    for m in re.finditer(r'^(github|git)\s+"([^"]+)"\s+"v?([^"]+)"', path.read_text(encoding="utf-8"), re.M):
+        repo = f"github.com/{m.group(2)}" if m.group(1) == "github" else swift_url(m.group(2))
+        if re.match(r"\d", m.group(3)):
+            out.append(_pkg("SwiftURL", repo, m.group(3), path))
+    return out, None
+
+
+def parse_podfile_lock(path: Path) -> Parsed:
+    """CocoaPods: inventory only (no advisory database covers CocoaPods; IOC packs still match names)."""
+    text = path.read_text(encoding="utf-8")
+    local = set(re.findall(r"^  ([^\s:]+):\n    :path:", text, re.M))  # EXTERNAL SOURCES with a local path
+    out: list[Package] = []
+    seen = set()
+    section = text.split("\nDEPENDENCIES:")[0]
+    for name, version in re.findall(r"^  - \"?([^\s\"(]+)\"? \(([^)]+)\)", section, re.M):
+        base = name.split("/")[0]  # subspecs (Firebase/Core) belong to the pod
+        if base in local or (base, version) in seen:
+            continue
+        seen.add((base, version))
+        out.append(_pkg("CocoaPods", base, version, path))
+    return out, None
+
+
+# ---------------------------------------------------------------- Bun, Deno, Elixir, R, C/C++, .NET projects
+
+def _jsonc(text: str) -> dict:
+    return json.loads(re.sub(r",(\s*[}\]])", r"\1", text))  # bun.lock allows trailing commas
+
+
+def _split_at_version(spec: str) -> tuple[str, str]:
+    i = spec.rfind("@")
+    return (spec[:i], spec[i + 1:]) if i > 0 else (spec, "")
+
+
+def parse_bun_lock(path: Path) -> Parsed:
+    d = _jsonc(path.read_text(encoding="utf-8"))
+    direct = {n for ws in (d.get("workspaces") or {}).values() for f in ("dependencies", "devDependencies",
+                                                                           "optionalDependencies") for n in (ws.get(f) or {})}
+    out: list[Package] = []
+    for entry in (d.get("packages") or {}).values():
+        if not isinstance(entry, list) or not entry or not isinstance(entry[0], str):
+            continue
+        name, version = _split_at_version(entry[0])
+        if version and re.match(r"\d", version):
+            out.append(_pkg("npm", name, version, path, direct=name in direct))
+    return out, None
+
+
+def parse_deno_lock(path: Path) -> Parsed:
+    d = json.loads(path.read_text(encoding="utf-8"))
+    npm = d.get("npm") or (d.get("packages") or {}).get("npm") or {}
+    out: list[Package] = []
+    for key in npm:
+        name, version = _split_at_version(key.split("_")[0])
+        if version:
+            out.append(_pkg("npm", name, version, path))
+    return out, None
+
+
+def parse_mix_lock(path: Path) -> Parsed:
+    text = path.read_text(encoding="utf-8")
+    return [_pkg("Hex", n, v, path) for n, v in re.findall(r'\{:hex,\s*:"?([\w]+)"?,\s*"([^"]+)"', text)], None
+
+
+def parse_renv_lock(path: Path) -> Parsed:
+    d = json.loads(path.read_text(encoding="utf-8"))
+    out = [_pkg("CRAN", p.get("Package", n), p["Version"], path) for n, p in (d.get("Packages") or {}).items()
+           if p.get("Version") and p.get("Source") == "Repository" and p.get("Repository", "CRAN") in ("CRAN", "RSPM", "PPM")]
+    return out, None
+
+
+def parse_conan_lock(path: Path) -> Parsed:
+    d = json.loads(path.read_text(encoding="utf-8"))
+    refs = [*(d.get("requires") or []), *(d.get("build_requires") or []), *(d.get("python_requires") or [])]
+    refs += [n.get("ref", "") for n in ((d.get("graph_lock") or {}).get("nodes") or {}).values()]  # lockfile v1
+    out: list[Package] = []
+    for ref in refs:
+        m = re.match(r"([\w.+\-]+)/([\w.+\-]+)", ref or "")
+        if m and not any(p.name == m.group(1) and p.version == m.group(2) for p in out):
+            out.append(_pkg("ConanCenter", m.group(1), m.group(2), path))
+    return out, None
+
+
+def parse_msbuild(path: Path) -> Parsed:
+    """PackageReference in .csproj/.fsproj/.vbproj, PackageVersion in Directory.Packages.props."""
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    out: list[Package] = []
+    for tag in re.finditer(r"<Package(?:Reference|Version)\b([^>]*?)(/>|>(.*?)</Package(?:Reference|Version)>)", text, re.S):
+        attrs, body = tag.group(1), tag.group(3) or ""
+        name = re.search(r'\bInclude="([^"]+)"', attrs)
+        ver = re.search(r'\bVersion="([^"]+)"', attrs) or re.search(r"<Version>([^<]+)</Version>", body)
+        version = ver.group(1).strip("[] ") if ver else ""
+        if name and version and re.fullmatch(r"[\d][\w.\-]*", version):
+            out.append(_pkg("NuGet", name.group(1), version, path, direct=True))
+    return out, None
+
+
+# ---------------------------------------------------------------- PDM, pylock, Haskell, Julia, OCaml, Erlang, Paket
+
+def parse_pdm_lock(path: Path) -> Parsed:
+    d = _read_toml(path)
+    return [_pkg("PyPI", p["name"], str(p["version"]), path) for p in d.get("package") or []
+            if p.get("name") and p.get("version")], None
+
+
+def parse_pylock(path: Path) -> Parsed:
+    """PEP 751 pylock.toml (pip, uv and PDM can write it)."""
+    d = _read_toml(path)
+    return [_pkg("PyPI", p["name"], str(p["version"]), path) for p in d.get("packages") or []
+            if p.get("name") and p.get("version")], None
+
+
+def parse_cabal_freeze(path: Path) -> Parsed:
+    text = path.read_text(encoding="utf-8")
+    return [_pkg("Hackage", n, v, path) for n, v in re.findall(r"\bany\.([\w\-]+)\s*==\s*([\d.]+)", text)], None
+
+
+def parse_stack_lock(path: Path) -> Parsed:
+    text = path.read_text(encoding="utf-8")
+    pairs = re.findall(r"hackage:\s*([\w\-]+?)-(\d[\d.]*)@", text)
+    return [_pkg("Hackage", n, v, path) for n, v in dict.fromkeys(pairs)], None
+
+
+def parse_julia_manifest(path: Path) -> Parsed:
+    d = _read_toml(path)
+    deps = d.get("deps") if isinstance(d.get("deps"), dict) else {k: v for k, v in d.items() if isinstance(v, list)}
+    out: list[Package] = []
+    for name, entries in deps.items():
+        for e in entries if isinstance(entries, list) else [entries]:
+            if isinstance(e, dict) and e.get("version"):  # standard libraries have no version
+                out.append(_pkg("Julia", name, str(e["version"]), path))
+    return out, None
+
+
+def parse_opam_locked(path: Path) -> Parsed:
+    text = path.read_text(encoding="utf-8")
+    return [_pkg("opam", n, v, path) for n, v in re.findall(r'"([\w\-.+]+)"\s*\{\s*=\s*"([^"]+)"', text)], None
+
+
+def parse_rebar_lock(path: Path) -> Parsed:
+    text = path.read_text(encoding="utf-8")
+    return [_pkg("Hex", n, v, path) for n, v in re.findall(r'\{pkg,\s*<<"([\w]+)">>,\s*<<"([^"]+)">>', text)], None
+
+
+def parse_paket_lock(path: Path) -> Parsed:
+    out: list[Package] = []
+    in_nuget = False
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        if line and not line.startswith(" "):
+            in_nuget = line.strip() == "NUGET"
+            continue
+        m = re.match(r"^ {4}([\w.\-]+) \((\d[^)]*)\)", line)
+        if in_nuget and m and not any(p.name == m.group(1) and p.version == m.group(2) for p in out):
+            out.append(_pkg("NuGet", m.group(1), m.group(2), path))
+    return out, None
+
+
+def package_manager(project: Path) -> list[Package]:
+    """The pnpm/yarn/npm version a project pins in package.json "packageManager" (Corepack)."""
+    pj = project / "package.json"
+    spec = str(_read_json(pj).get("packageManager") or "")
+    m = re.match(r"^(npm|pnpm|yarn|bun)@(\d[\w.\-]*)", spec)
+    if not m or m.group(1) == "bun":  # bun isn't published on npm with its advisories
+        return []
+    p = _pkg("npm", m.group(1), m.group(2).split("+")[0], pj, direct=True, dev=True)
+    return [p]
+
+
+# ---------------------------------------------------------------- GitHub Actions used by workflows
+
+_USES = re.compile(r"""^\s*-?\s*uses:\s*['"]?([\w.\-]+/[\w.\-]+)(?:/[^@\s'"]*)?@([^\s'"#]+)['"]?(?:\s*#\s*(\S+))?""", re.M)
+
+
+def parse_workflow(path: Path) -> Parsed:
+    """Actions and their versions: a tag (v4.2.1), or the version in the comment of a SHA pin (@<sha> # v4.2.1)."""
+    out: list[Package] = []
+    seen = set()
+    for repo, ref, comment in _USES.findall(path.read_text(encoding="utf-8", errors="replace")):
+        label = comment if re.fullmatch(r"[0-9a-f]{40}", ref) else ref
+        m = re.fullmatch(r"v?(\d+(?:\.\d+)*)", label or "")
+        if m and (repo.lower(), m.group(1)) not in seen:
+            seen.add((repo.lower(), m.group(1)))
+            p = _pkg("GitHub Actions", repo, m.group(1), path, direct=True)
+            p.meta.update(lockfile="workflow", project=str(path.parents[2]), workflow=path.name, ref=ref)
+            out.append(p)
+    return out, None
+
+
 PARSERS: dict[str, Callable[[Path], Parsed]] = {
     "package-lock.json": parse_package_lock,
     "npm-shrinkwrap.json": parse_package_lock,
@@ -657,17 +954,50 @@ PARSERS: dict[str, Callable[[Path], Parsed]] = {
     "gradle.lockfile": parse_gradle_lockfile,
     "libs.versions.toml": parse_version_catalog,
     "packages.lock.json": parse_nuget_lock,
+    "build.gradle": parse_gradle_build,
+    "build.gradle.kts": parse_gradle_build,
+    "pubspec.lock": parse_pubspec_lock,
+    "Package.resolved": parse_package_resolved,
+    "Cartfile.resolved": parse_cartfile_resolved,
+    "Podfile.lock": parse_podfile_lock,
+    "bun.lock": parse_bun_lock,
+    "deno.lock": parse_deno_lock,
+    "mix.lock": parse_mix_lock,
+    "renv.lock": parse_renv_lock,
+    "conan.lock": parse_conan_lock,
+    "Directory.Packages.props": parse_msbuild,
+    "pdm.lock": parse_pdm_lock,
+    "pylock.toml": parse_pylock,
+    "gems.locked": parse_gemfile_lock,
+    "cabal.project.freeze": parse_cabal_freeze,
+    "stack.yaml.lock": parse_stack_lock,
+    "Manifest.toml": parse_julia_manifest,
+    "JuliaManifest.toml": parse_julia_manifest,
+    "rebar.lock": parse_rebar_lock,
+    "paket.lock": parse_paket_lock,
 }
 _REQ = re.compile(r"^requirements[\w.-]*\.txt$")
+JS_LOCKFILES = {"package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock"}
 BUILD_FILES = {"gradle-wrapper.jar", "gradle-wrapper.properties", "maven-wrapper.jar", "maven-wrapper.properties",
                "gradlew", "mvnw", ".gitlab-ci.yml"}
 
 
-def parser_for(name: str) -> Callable[[Path], Parsed] | None:
+def parser_for(name: str, parent: Path | None = None) -> Callable[[Path], Parsed] | None:
     if name in PARSERS:
         return PARSERS[name]
     if _REQ.match(name):
         return parse_requirements
+    if name.endswith((".csproj", ".fsproj", ".vbproj")):
+        return parse_msbuild
+    if name.endswith(".opam.locked"):
+        return parse_opam_locked
+    if re.fullmatch(r"pylock\.[\w\-]+\.toml", name):
+        return parse_pylock
+    if re.fullmatch(r"Manifest-v[\d.]+\.toml", name):
+        return parse_julia_manifest
+    if parent is not None and parent.name == "workflows" and parent.parent.name == ".github" \
+            and name.endswith((".yml", ".yaml")):
+        return parse_workflow
     return None
 
 
@@ -688,10 +1018,11 @@ def discover(ctx: Context) -> None:
                 dirnames[:] = []
             dirnames[:] = [d for d in dirnames if d not in exclude]
             for f in filenames:
-                if parser_for(f):
-                    ctx.lockfiles.append(Path(dirpath) / f)
-                elif f in BUILD_FILES or (dirpath.endswith(os.path.join(".github", "workflows")) and f.endswith((".yml", ".yaml"))):
-                    ctx.build_files.append(Path(dirpath) / f)
+                path = Path(dirpath) / f
+                if parser_for(f, path.parent):
+                    ctx.lockfiles.append(path)
+                if f in BUILD_FILES or (dirpath.endswith(os.path.join(".github", "workflows")) and f.endswith((".yml", ".yaml"))):
+                    ctx.build_files.append(path)
 
 
 def _collect(ctx: Context) -> list[Package]:
@@ -702,7 +1033,7 @@ def _collect(ctx: Context) -> list[Package]:
             if lf.stat().st_size > MAX_LOCKFILE_BYTES:
                 ctx.errors.append(f"skipped oversized lockfile {lf}")
                 continue
-            pkgs, graph = parser_for(lf.name)(lf)  # type: ignore[misc]
+            pkgs, graph = parser_for(lf.name, lf.parent)(lf)  # type: ignore[misc]
         except Exception as e:
             ctx.errors.append(f"{lf}: {e!r}")
             debug(f"failed to parse {lf}: {e!r}")
@@ -711,6 +1042,9 @@ def _collect(ctx: Context) -> list[Package]:
             finalize(graph, pkgs, str(lf))
             ctx.graphs[str(lf)] = graph
         out.extend(pkgs)
+    js = {lf.parent for lf in ctx.lockfiles if lf.name in JS_LOCKFILES}
+    for project in sorted(js):
+        out.extend(package_manager(project))
     return out
 
 

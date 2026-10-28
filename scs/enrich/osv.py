@@ -6,8 +6,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from scs.cvss import cvss3_base_score, severity_from_score
-from scs.models import Advisory, normalize_name
+from scs.models import CLIENT_SIDE_RANGES, Advisory, normalize_name
 from scs.util import HttpError, cache_dir, debug, http_json, log, read_json, write_json
+from scs.versions import vkey
 
 QUERY_URL = "https://api.osv.dev/v1/querybatch"
 VULN_URL = "https://api.osv.dev/v1/vulns/{}"
@@ -40,15 +41,16 @@ def _query(keys: list[Key], offline: bool) -> dict[Key, list[tuple[str, str]]]:
     for i in range(0, len(todo), BATCH):
         chunk = todo[i:i + BATCH]
         log(f"OSV: querying {i + len(chunk)}/{len(todo)} packages")
-        payload = {"queries": [{"package": {"ecosystem": e, "name": n}, "version": v} for e, n, v in chunk]}
+        payload = {"queries": [{"package": {"ecosystem": e, "name": n}, **({} if e in CLIENT_SIDE_RANGES else {"version": v})}
+                               for e, n, v in chunk]}
         resp = http_json(QUERY_URL, payload, timeout=120)
         for k, r in zip(chunk, resp.get("results", [])):
             ids = [(v["id"], v.get("modified", "")) for v in r.get("vulns", []) or []]
             token = r.get("next_page_token")
             while token:
                 e, n, v = k
-                more = http_json(QUERY_URL, {"queries": [{"package": {"ecosystem": e, "name": n},
-                                                          "version": v, "page_token": token}]})
+                more = http_json(QUERY_URL, {"queries": [{"package": {"ecosystem": e, "name": n}, "page_token": token,
+                                                          **({} if e in CLIENT_SIDE_RANGES else {"version": v})}]})
                 r2 = more["results"][0]
                 ids += [(x["id"], x.get("modified", "")) for x in r2.get("vulns", []) or []]
                 token = r2.get("next_page_token")
@@ -105,6 +107,32 @@ def _fixed_versions(vuln: dict, eco: str, name: str) -> list[str]:
             target += [ev["fixed"] for ev in rng.get("events", []) if "fixed" in ev]
     # Ubuntu Pro (ESM) fixes only count when the public archive has none; they carry "esm" in the version
     return sorted(set(fixes or pro_fixes))
+
+
+def affects(vuln: dict, eco: str, name: str, version: str) -> bool:
+    """Whether `version` falls in one of the advisory's ECOSYSTEM/SEMVER ranges (or its version list)."""
+    v = vkey(version, eco)
+    for aff in vuln.get("affected", []):
+        pkg = aff.get("package", {})
+        if not _eco_matches(pkg.get("ecosystem", ""), eco) or normalize_name(eco, pkg.get("name", "")) != normalize_name(eco, name):
+            continue
+        if version in (aff.get("versions") or []):
+            return True
+        for rng in aff.get("ranges", []):
+            if rng.get("type") == "GIT":
+                continue
+            inside = False
+            for ev in rng.get("events", []):
+                if "introduced" in ev:  # events are ordered: each window opens at introduced, closes at fixed
+                    if ev["introduced"] == "0" or v >= vkey(ev["introduced"], eco):
+                        inside = True
+                elif "fixed" in ev and inside and v >= vkey(ev["fixed"], eco):
+                    inside = False
+                elif "last_affected" in ev and inside and v > vkey(ev["last_affected"], eco):
+                    inside = False
+            if inside:
+                return True
+    return False
 
 
 def to_advisory(vuln: dict, eco: str, name: str) -> Advisory:
@@ -172,7 +200,10 @@ def lookup(keys: list[Key], offline: bool = False) -> dict[Key, list[Advisory]]:
     details = _fetch_all(wanted, offline)
     out: dict[Key, list[Advisory]] = {}
     for k, ids in hits.items():
-        advs = [to_advisory(details[v], k[0], k[1]) for v, _ in ids if details.get(v)]
+        vulns = [details[v] for v, _ in ids if details.get(v)]
+        if k[0] in CLIENT_SIDE_RANGES:
+            vulns = [v for v in vulns if affects(v, *k)]
+        advs = [to_advisory(v, k[0], k[1]) for v in vulns]
         advs = [a for a in advs if not _withdrawn(details[a.id])]
         if advs:
             out[k] = dedupe(advs)

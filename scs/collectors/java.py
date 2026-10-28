@@ -81,13 +81,29 @@ def maven_cache(root: Path) -> list[Package]:
     return out
 
 
+def coursier_repos() -> list[Path]:
+    """Maven repositories mirrored in Coursier's cache (sbt, Mill, Scala CLI: Scala, Kotlin, Clojure projects)."""
+    roots = [os.environ.get("COURSIER_CACHE", ""), "~/Library/Caches/Coursier/v1", "~/.cache/coursier/v1",
+             "~/AppData/Local/Coursier/cache/v1"]
+    out = []
+    for r in filter(None, roots):
+        base = Path(os.path.expanduser(r)) / "https"
+        out += [p for p in (base / "repo1.maven.org" / "maven2", base / "repo.maven.apache.org" / "maven2") if p.is_dir()]
+    return out
+
+
 def _collect(ctx: Context) -> list[Package]:
-    return gradle_cache(gradle_home()) + maven_cache(maven_repo())
+    pkgs = gradle_cache(gradle_home()) + maven_cache(maven_repo())
+    for repo in coursier_repos():
+        for p in maven_cache(repo):
+            p.meta["cache"] = "coursier"
+            pkgs.append(p)
+    return pkgs
 
 
 def _available(ctx: Context) -> bool:
-    return (gradle_home() / "caches" / "modules-2").is_dir() or maven_repo().is_dir()
+    return (gradle_home() / "caches" / "modules-2").is_dir() or maven_repo().is_dir() or bool(coursier_repos())
 
 
-COLLECTOR = Collector("java-cache", "Java libraries in the Maven (~/.m2) and Gradle download caches", True,
+COLLECTOR = Collector("java-cache", "Java/Kotlin/Scala libraries in the Maven (~/.m2), Gradle and Coursier caches", True,
                       _available, _collect)

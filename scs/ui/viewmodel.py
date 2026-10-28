@@ -17,6 +17,9 @@ ECO_LABEL = {
     "Homebrew": "Homebrew tool", "Homebrew-cask": "Mac app (Homebrew)", "Windows-app": "Windows program",
     "winget": "App (winget)", "chocolatey": "App (Chocolatey)", "scoop": "App (Scoop)", "Snap": "Snap app",
     "Flatpak": "Flatpak app", "file": "Suspicious file", "Runtime": "Language runtime", "Dev-tool": "Developer tool",
+    "Pub": "Dart/Flutter package", "SwiftURL": "Swift package (iOS/macOS)", "CocoaPods": "CocoaPods pod (iOS)",
+    "Hex": "Elixir package", "CRAN": "R package", "ConanCenter": "C/C++ package (Conan)", "GitHub Actions": "GitHub Action",
+    "Hackage": "Haskell package", "Julia": "Julia package", "opam": "OCaml package",
 }
 GROUPS = {
     "respond": {"id": "act", "title": "Act now", "blurb": "Known malicious software. Remove it and change your passwords and tokens."},
@@ -38,10 +41,16 @@ def eco_label(eco: str) -> str:
 def where_plain(p: dict) -> str:
     meta = p.get("meta") or {}
     src = p.get("source")
-    if src in ("runtime", "devtool"):
+    if src in ("runtime", "devtool", "gem", "go-binary", "dotnet-tool", "corepack") or (src == "lockfile" and meta.get("display")):
         return meta.get("display") or short_path(p.get("location", ""))
     if src == "java-cache":
         return "Gradle download cache" if meta.get("cache") == "gradle" else "Maven local repository (~/.m2)"
+    if src == "pub-cache":
+        return "Dart/Flutter download cache (pub)"
+    if src == "nuget-cache":
+        return "NuGet download cache (~/.nuget/packages)"
+    if src == "lockfile" and meta.get("lockfile") == "workflow":
+        return f"Workflow {meta.get('workflow', '')} in {os.path.basename(meta.get('project', ''))}"
     if src == "lockfile":
         proj = meta.get("project", "")
         return f"Project {os.path.basename(proj)} ({short_path(proj)})"
@@ -162,8 +171,8 @@ def display_name(f: dict) -> str:
     """'stdlib' is Go's standard library: name the toolchain instead."""
     if f["ecosystem"] == "Go" and f["name"] == "stdlib":
         return "Go"
-    return {"java": "Java (JDK)", "node": "Node.js", "python": "Python"}.get(f["name"], f["name"]) \
-        if f["ecosystem"] == "Runtime" else f["name"]
+    from scs.collectors.runtimes import LABELS
+    return LABELS.get(f["name"], f["name"]) if f["ecosystem"] == "Runtime" else f["name"]
 
 
 def plain_finding(f: dict) -> dict:

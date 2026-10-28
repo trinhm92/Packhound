@@ -26,6 +26,8 @@ GLOBAL_DIRS = [
     "~/Library/pnpm/global/*/node_modules",
     "~/.local/share/pnpm/global/*/node_modules",
     "~/.bun/install/global/node_modules",
+    "~/.config/yarn/global/node_modules",               # yarn classic `yarn global add`
+    "~/AppData/Local/Yarn/Data/global/node_modules",
     "~/AppData/Roaming/npm/node_modules",
     "~/AppData/Roaming/nvm/v*/node_modules",          # nvm-windows
     "C:/Program Files/nodejs/node_modules",
@@ -108,5 +110,5 @@ def _collect(ctx: Context) -> list[Package]:
     return out
 
 
-COLLECTOR = Collector("npm-global", "Global Node packages (npm, nvm, volta, fnm, pnpm, bun)", True,
+COLLECTOR = Collector("npm-global", "Global Node packages (npm, nvm, volta, fnm, pnpm, yarn, bun)", True,
                       lambda ctx: bool(global_dirs()), _collect)
