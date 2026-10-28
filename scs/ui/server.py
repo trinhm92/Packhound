@@ -151,7 +151,9 @@ class App:
         everything = mw["findings"] + [{k: v for k, v in m.items() if k != "ignore"} for m in mw.get("ignored", [])]
         shown, ignored = ignore.split(everything)
         counts = {s: sum(m["severity"] == s for m in shown) for s in ("critical", "high", "medium", "low", "info")}
-        return {"items": [vm.plain_malware(m) for m in shown], "scanned": mw["started"],
+        from scs.malware import actions
+        return {"items": [{**vm.plain_malware(m), **actions.describe(m)} for m in shown], "scanned": mw["started"],
+                "actions": [{**v, "path": vm.short_path(v["path"])} for v in map(actions.to_view, actions.history()[:50])],
                 "ignored": [{**vm.plain_malware(m), "reason": m["ignore"]["reason"], "expires": m["ignore"]["expires"],
                              "added": m["ignore"]["added"]} for m in ignored],
                 "counts": counts, "stats": mw.get("stats", {}),
@@ -166,6 +168,25 @@ class App:
             raise ValueError("item not found (run the check again?)")
         ignore.add(f, reason, "" if expires == "never" else parse_expiry(expires))
         return {"ok": True}
+
+    def malware_act(self, item_id: str, action_id: str) -> dict:
+        """Fix one reported item. Quick actions run now; ones that run a package manager become a job."""
+        from scs.malware import actions, ignore
+        mw = _latest_malware() or {}
+        f = next((m for m in mw.get("findings", []) if ignore.finding_id(m) == item_id), None)
+        if not f:
+            raise ValueError("item not found (run the check again?)")
+        act = next((a for a in actions.available(f) if a.id == action_id), None)
+        if not act:
+            raise ValueError("that action isn't available for this item any more")
+        if act.slow:
+            return {"job": self.jobs.start("fix", f"{act.label}: {f['title']}",
+                                           lambda job: actions.to_view(actions.apply(f, action_id, job.append))).view()}
+        return {"done": actions.to_view(actions.apply(f, action_id))}
+
+    def malware_undo(self, record_id: str) -> dict:
+        from scs.malware import actions
+        return {"undone": actions.to_view(actions.undo(record_id))}
 
     def malware_unignore(self, item_id: str) -> dict:
         from scs.malware import ignore
@@ -438,7 +459,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, self._api(method, path, data, query))
         except Busy as e:
             return self._json(409, {"error": str(e)})
-        except (ValueError, KeyError, FileNotFoundError, PermissionError, RuntimeError) as e:
+        except (ValueError, KeyError, OSError, RuntimeError) as e:  # OSError: file not found, permission, exists…
             return self._json(400, {"error": str(e)})
 
     def _static(self, path: str) -> None:
@@ -484,6 +505,8 @@ class Handler(BaseHTTPRequestHandler):
             ("POST", "/api/malware/ignore"): lambda: app.malware_ignore(data["id"], data.get("reason", ""),
                                                                         data.get("expires", "90d")),
             ("POST", "/api/malware/unignore"): lambda: app.malware_unignore(data["id"]),
+            ("POST", "/api/malware/act"): lambda: app.malware_act(data["id"], data["action"]),
+            ("POST", "/api/malware/undo"): lambda: app.malware_undo(data["id"]),
             ("POST", "/api/quarantine"): lambda: app.quarantine(data["path"], data.get("reason", "")),
             ("POST", "/api/quarantine/restore"): lambda: __import__("scs.malware.quarantine", fromlist=["x"]).restore(data["id"]),
             ("POST", "/api/settings"): lambda: app.save_settings(data),
