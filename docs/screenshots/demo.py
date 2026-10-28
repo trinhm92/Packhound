@@ -27,6 +27,7 @@ os.environ.update({"HOME": str(TMP), "XDG_DATA_HOME": str(TMP / "data"), "XDG_CA
 socket.gethostname = lambda: "demo-mac"  # shown in the sidebar
 sys.path.insert(0, str(REPO))
 
+from scs import __version__  # noqa: E402
 from scs.analyze import build_findings, summarize  # noqa: E402
 from scs.models import Advisory, Package  # noqa: E402
 
@@ -82,7 +83,7 @@ def demo_scan() -> dict:
     findings, ignored = build_findings(pkgs, {p.key: a for p, a in items}, [])
     started = "2026-10-27T09:00:12+07:00"
     return {
-        "scs_version": "0.1.0", "host": "demo-mac", "started": started, "platform": "Darwin 25.6.0 arm64",
+        "scs_version": __version__, "host": "demo-mac", "started": started, "platform": "Darwin 25.6.0 arm64",
         "duration_s": 41.3, "config": {"roots": [f"{H}/code"], "offline": False, "nvd": False, "system": True},
         "collectors": {}, "errors": [], "has_previous": True,
         "sources": {"osv": "1874 packages queried, 214 advisories", "runtimes": "9 runtimes checked"},
@@ -116,7 +117,7 @@ def demo_malware() -> dict:
         return {"check": check, "severity": sev, "title": title, "path": path, "evidence": list(evidence),
                 "rules": list(rules), "advice": advice, "quarantinable": quarantinable, "new": True, "meta": meta or {}}
     return {
-        "kind": "malware", "scs_version": "0.1.0", "host": "demo-mac", "started": "2026-10-27T09:01:40+07:00",
+        "kind": "malware", "scs_version": __version__, "host": "demo-mac", "started": "2026-10-27T09:01:40+07:00",
         "duration_s": 12.4, "checks": ["packages", "buildchain", "persistence", "extensions", "exposure"],
         "has_baseline": True, "stats": {}, "ignored": [], "inventory": {}, "yara_rules": [],
         "counts": {"critical": 1, "high": 2, "medium": 0, "low": 1, "info": 0},

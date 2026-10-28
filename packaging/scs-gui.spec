@@ -5,6 +5,8 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
 NAME = "Packhound"
+with open(os.path.join(SPECPATH, "..", "scs", "__init__.py"), encoding="utf-8") as _f:  # one version, set in scs/__init__.py
+    VERSION = next(line.split('"')[1] for line in _f if line.startswith("__version__"))
 ICON_MAC = os.environ.get("SCS_ICON_MAC") or os.path.join(SPECPATH, "icon.icns")
 ICON_WIN = os.path.join(SPECPATH, "icon.ico")
 
@@ -40,7 +42,7 @@ if sys.platform == "darwin":
         coll, name=f"{NAME}.app", icon=ICON_MAC if os.path.exists(ICON_MAC) else None,
         bundle_identifier="io.github.trinhm92.packhound",
         info_plist={
-            "CFBundleShortVersionString": "0.1.0",
+            "CFBundleShortVersionString": VERSION,
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "11.0",
             "LSArchitecturePriority": ["arm64", "x86_64"],

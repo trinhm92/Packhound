@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "packhound"
-version = "0.1.0"
+version = "0.2.0"
 description = "Supply chain security scanner for developer machines: vulnerable and malicious packages, runtimes, build chain"
 readme = "README.md"
 license = "Apache-2.0"

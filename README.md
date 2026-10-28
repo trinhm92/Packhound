@@ -120,7 +120,7 @@ Build dependencies are hash-locked: see [Security of scs itself](#security-of-sc
 3. **Release:** on a tag `v*`, all installers plus `SHA256SUMS` go into a **draft** GitHub release for you to review. Each file gets a signed build-provenance attestation, which anyone can check with `gh attestation verify <file> --repo trinhm92/Packhound` (see [SECURITY.md](SECURITY.md#verifying-a-download)).
 
 ```bash
-git tag v0.1.0 && git push origin main v0.1.0
+git tag v0.2.0 && git push origin v0.2.0   # on main, after the version bump is merged
 ```
 
 **Supply-chain hygiene in the pipeline:**
