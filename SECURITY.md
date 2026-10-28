@@ -50,7 +50,7 @@ The installers are **not code-signed** (no Apple Developer ID or Windows Authent
    On Windows (PowerShell): `Get-FileHash .\Packhound-*-setup.exe` and compare with the line in `SHA256SUMS`.
 2. **Build provenance.** A signed attestation (Sigstore) proves the file was built by this repository's CI workflow, from which commit:
    ```bash
-   gh attestation verify Packhound-0.1.0-universal2.dmg --repo trinhm92/Packhound
+   gh attestation verify Packhound-0.2.0-universal2.dmg --repo trinhm92/Packhound
    ```
    You can also see the attestations on the repository's [Attestations page](https://github.com/trinhm92/Packhound/attestations).
 
