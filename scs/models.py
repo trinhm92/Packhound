@@ -6,7 +6,10 @@ from dataclasses import asdict, dataclass, field
 from typing import Optional
 
 # OSV ecosystem names for the ecosystems OSV can answer for.
-OSV_ECOSYSTEMS = {"PyPI", "npm", "crates.io", "Go", "RubyGems", "Packagist", "Maven", "NuGet"}
+OSV_ECOSYSTEMS = {"PyPI", "npm", "crates.io", "Go", "RubyGems", "Packagist", "Maven", "NuGet", "Pub", "SwiftURL", "Hex",
+                  "CRAN", "ConanCenter", "GitHub Actions"}
+# OSV can't compare versions of these server-side: query every advisory of the package, match ranges here
+CLIENT_SIDE_RANGES = {"GitHub Actions"}
 
 
 def osv_supported(ecosystem: str) -> bool:
@@ -16,7 +19,8 @@ def osv_supported(ecosystem: str) -> bool:
 PURL_TYPES = {
     "PyPI": "pypi", "npm": "npm", "crates.io": "cargo", "Go": "golang", "RubyGems": "gem",
     "Packagist": "composer", "Maven": "maven", "NuGet": "nuget", "Homebrew": "brew",
-    "Homebrew-cask": "brew-cask", "Snap": "snap", "Flatpak": "flatpak",
+    "Homebrew-cask": "brew-cask", "Snap": "snap", "Flatpak": "flatpak", "Pub": "pub", "SwiftURL": "swift", "Hex": "hex",
+    "CRAN": "cran", "ConanCenter": "conan", "CocoaPods": "cocoapods", "GitHub Actions": "github",
 }
 
 SEVERITY_ORDER = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "UNKNOWN": 0}
@@ -25,7 +29,8 @@ SEVERITY_ORDER = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "UNKNOWN": 0}
 def normalize_name(ecosystem: str, name: str) -> str:
     if ecosystem == "PyPI":
         return re.sub(r"[-_.]+", "-", name).lower()
-    if ecosystem in ("Homebrew", "Homebrew-cask", "crates.io", "RubyGems") or ecosystem.startswith(("Ubuntu:", "Debian:")):
+    if ecosystem in ("Homebrew", "Homebrew-cask", "crates.io", "RubyGems", "GitHub Actions") \
+            or ecosystem.startswith(("Ubuntu:", "Debian:")):
         return name.lower()
     return name
 

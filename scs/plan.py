@@ -634,7 +634,7 @@ def _project(t: Target) -> None:
                 t.change.append(f"bundle update --conservative {' '.join(names)}")
             t.verify.append("bundle exec rake test" if "Rakefile" in proj.get("markers", []) else "bundle check")
             t.rollback.append("bundle install   # after restoring Gemfile.lock")
-        elif lockfile in handfix.MANUAL_LOCKFILES:
+        elif lockfile in handfix.MANUAL_LOCKFILES or lockfile.endswith(handfix.MSBUILD):
             for i in items:
                 for st in handfix.steps(i.pkg["ecosystem"], i.name, i.pkg["version"], i.fix, i.pkg):
                     t.manual.append(st["text"] + (f"  `{st['cmd']}`" if st.get("cmd") else ""))

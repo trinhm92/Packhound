@@ -244,9 +244,10 @@ def build_findings(packages: list[Package], advisories: dict, file_hits: list[di
             f.reasons.append("dev-only dependency")
         if all(p.direct is False for p in pkgs):
             exposure *= 0.9
-        if all(p.source == "java-cache" for p in pkgs):
+        if all(p.source in ("java-cache", "pub-cache") for p in pkgs):
             exposure *= 0.8
-            f.reasons.append("only in the Gradle/Maven download cache: a build on this computer used it")
+            cache = "Gradle/Maven" if pkgs[0].source == "java-cache" else "Dart/Flutter (pub)"
+            f.reasons.append(f"only in the {cache} download cache: a build on this computer used it")
         f.score = min(100, round(max(_advisory_score(a) for a in advs) * (1 if malicious else exposure)))
 
         f.ignored = ignored

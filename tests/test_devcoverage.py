@@ -70,7 +70,8 @@ android = { id = "com.android.application", version = "8.0.0" }
         pkgs, _ = lockfiles.parser_for("libs.versions.toml")(cat)
         self.assertEqual({(p.name, p.version) for p in pkgs},
                          {("com.squareup.okhttp3:okhttp", "4.12.0"), ("com.google.code.gson:gson", "2.10.1"),
-                          ("a:b", "1.2.3"), ("c:d", "3.0")})
+                          ("a:b", "1.2.3"), ("c:d", "3.0"),
+                          ("com.android.tools.build:gradle", "8.0.0")})  # the Android plugin, checked as its artifact
         self.assertEqual(pkgs[0].meta["project"], str(d))  # the project, not its gradle/ folder
 
     def test_nuget(self):

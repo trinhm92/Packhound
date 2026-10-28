@@ -24,10 +24,10 @@ Most dependency scanners read one project's lockfile. Attacks like the npm worms
 
 | | Project scanners | Packhound |
 |---|---|---|
-| Project lockfiles (npm, PyPI, Go, Rust, Ruby, PHP, Java, .NET) | ✅ | ✅ |
+| Project lockfiles (npm, PyPI, Go, Rust, Ruby, PHP, Java/Android, .NET, Flutter, Swift) | ✅ | ✅ |
 | Globally installed tools: Homebrew, APT/Snap, winget/Chocolatey/Scoop, npm -g, pipx, cargo | — | ✅ |
 | Runtimes (JDK, Node.js, Python, Go): end of life, missed security updates | — | ✅ |
-| Java libraries in the Maven/Gradle caches, OS-bundled git/curl/OpenSSH | — | ✅ |
+| Download caches (Maven, Gradle, pub), OS-bundled git/curl/OpenSSH | — | ✅ |
 | Known-malicious packages plus install scripts, start-up items, extensions | partly | ✅ |
 | Gradle/Maven wrapper checksums, unpinned GitHub Actions | — | ✅ |
 | Fixes with snapshot, verification and automatic rollback | — | ✅ |
@@ -364,12 +364,13 @@ The behaviour rules are heuristics that run only on code that executes implicitl
 | `pip` | site-packages for pyenv, Homebrew, python.org, Command Line Tools, conda, pipx, uv tools and every venv under `--root` |
 | `npm-global` | Global node_modules for npm, nvm, volta, fnm, pnpm and bun, with the parent chain |
 | `cargo` | `cargo install` binaries |
-| `lockfile` | package-lock, npm-shrinkwrap, yarn.lock, pnpm-lock, poetry.lock, uv.lock, Pipfile.lock, requirements*.txt, Cargo.lock, go.mod, Gemfile.lock, composer.lock, pom.xml, gradle.lockfile, gradle/libs.versions.toml, NuGet packages.lock.json |
+| `lockfile` | **JavaScript:** package-lock, npm-shrinkwrap, yarn.lock, pnpm-lock, bun.lock, deno.lock. **Python:** poetry.lock, uv.lock, Pipfile.lock, requirements*.txt. **Rust, Go, Ruby, PHP:** Cargo.lock, go.mod, Gemfile.lock, composer.lock. **Java/Android:** pom.xml, gradle.lockfile, gradle/libs.versions.toml, and dependencies and plugins written in build.gradle(.kts). **Flutter/Dart:** pubspec.lock. **iOS/macOS:** Swift Package Manager Package.resolved, Carthage Cartfile.resolved, CocoaPods Podfile.lock (no advisory database covers CocoaPods, so pods are only checked against known-malicious lists). **.NET:** packages.lock.json, .csproj/.fsproj/.vbproj, Directory.Packages.props. **Others:** Elixir mix.lock, R renv.lock, C/C++ conan.lock, and the GitHub Actions your workflows use. React Native projects are covered through their npm, Gradle and CocoaPods files. |
+| `pub-cache` | Dart/Flutter packages every `pub get` on this machine downloaded (`~/.pub-cache`). |
 | `java-cache` | Java libraries every Maven/Gradle build on this machine downloaded (`~/.m2/repository`, `~/.gradle/caches/modules-2`). Only versions with a downloaded `.jar`/`.aar` count. |
 | `runtimes` | JDKs (macOS JavaVirtualMachines, SDKMAN, Homebrew, Android Studio/IntelliJ, Gradle toolchains, Windows vendors), Node.js (Homebrew, nvm, Volta, fnm), Python (pyenv, uv, Homebrew, python.org, Command Line Tools) and Go toolchains. Each is checked for end of life and missed security updates (endoflife.date; nodejs.org's security-release flags), and Go's standard library against OSV. |
 | `devtools` | git, curl and OpenSSH that Apple (Command Line Tools, Xcode, macOS) or Windows ship, matched against NVD. Homebrew, APT and winget copies come from those collectors; their git/curl/OpenSSH are matched against NVD without `--nvd` too. |
 
-JDKs, Node.js/Python/Go installs, OS-bundled tools, the Java caches and pom.xml/Gradle/NuGet files are updated by installers, IDEs or by editing build files. Their findings go to **No automatic fix** with step-by-step instructions; scs never runs those steps itself.
+JDKs, Node.js/Python/Go installs, OS-bundled tools, the download caches, and the build files of Android, iOS, Flutter, .NET and the other newer ecosystems are updated by installers, IDEs or by editing build files. Their findings go to **No automatic fix** with step-by-step instructions; scs never runs those steps itself.
 
 The collectors read metadata files and **never start the packages they inventory or anything that loads them**, so a malicious `.pth` file or install hook can't run during a scan. The only programs a scan starts are version calls: `git`/`curl --version` and `ssh -V` for Apple's or Windows' own copies, and `python -I -S -V` or `node --version` for a runtime whose version isn't written in a file.
 

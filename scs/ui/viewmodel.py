@@ -17,6 +17,8 @@ ECO_LABEL = {
     "Homebrew": "Homebrew tool", "Homebrew-cask": "Mac app (Homebrew)", "Windows-app": "Windows program",
     "winget": "App (winget)", "chocolatey": "App (Chocolatey)", "scoop": "App (Scoop)", "Snap": "Snap app",
     "Flatpak": "Flatpak app", "file": "Suspicious file", "Runtime": "Language runtime", "Dev-tool": "Developer tool",
+    "Pub": "Dart/Flutter package", "SwiftURL": "Swift package (iOS/macOS)", "CocoaPods": "CocoaPods pod (iOS)",
+    "Hex": "Elixir package", "CRAN": "R package", "ConanCenter": "C/C++ package (Conan)", "GitHub Actions": "GitHub Action",
 }
 GROUPS = {
     "respond": {"id": "act", "title": "Act now", "blurb": "Known malicious software. Remove it and change your passwords and tokens."},
@@ -42,6 +44,10 @@ def where_plain(p: dict) -> str:
         return meta.get("display") or short_path(p.get("location", ""))
     if src == "java-cache":
         return "Gradle download cache" if meta.get("cache") == "gradle" else "Maven local repository (~/.m2)"
+    if src == "pub-cache":
+        return "Dart/Flutter download cache (pub)"
+    if src == "lockfile" and meta.get("lockfile") == "workflow":
+        return f"Workflow {meta.get('workflow', '')} in {os.path.basename(meta.get('project', ''))}"
     if src == "lockfile":
         proj = meta.get("project", "")
         return f"Project {os.path.basename(proj)} ({short_path(proj)})"
