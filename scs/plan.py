@@ -629,7 +629,7 @@ def _project(t: Target) -> None:
                 t.change.append(f"go get {' '.join(specs)} && go mod tidy")
             t.verify += ["go build ./...", "go vet ./...", "go test ./..."]
             t.rollback.append("go mod download   # after restoring go.mod and go.sum")
-        elif lockfile == "Gemfile.lock":
+        elif lockfile in ("Gemfile.lock", "gems.locked"):
             if names:
                 t.change.append(f"bundle update --conservative {' '.join(names)}")
             t.verify.append("bundle exec rake test" if "Rakefile" in proj.get("markers", []) else "bundle check")

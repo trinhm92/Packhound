@@ -125,6 +125,7 @@ def _fix_commands(p: Package, fix: str | None, malicious: bool) -> list[str]:
             "Cargo.lock": f"cargo update -p {_q(n)} --precise {_q(fix)}",
             "go.mod": f"go get {_q(f'{n}@v{fix}' + ('+incompatible' if '+incompatible' in p.version else ''))} && go mod tidy",
             "Gemfile.lock": f"bundle update {_q(n)} --conservative",
+            "gems.locked": f"bundle update {_q(n)} --conservative",
             "composer.lock": f"composer update {_q(n)} --with-dependencies",
         }
         cmd = cmds.get(lf) or f"# edit {lf}: {n}=={fix}"
@@ -244,9 +245,9 @@ def build_findings(packages: list[Package], advisories: dict, file_hits: list[di
             f.reasons.append("dev-only dependency")
         if all(p.direct is False for p in pkgs):
             exposure *= 0.9
-        if all(p.source in ("java-cache", "pub-cache") for p in pkgs):
+        if all(p.source in ("java-cache", "pub-cache", "nuget-cache") for p in pkgs):
             exposure *= 0.8
-            cache = "Gradle/Maven" if pkgs[0].source == "java-cache" else "Dart/Flutter (pub)"
+            cache = {"java-cache": "Gradle/Maven", "pub-cache": "Dart/Flutter (pub)"}.get(pkgs[0].source, "NuGet (.NET)")
             f.reasons.append(f"only in the {cache} download cache: a build on this computer used it")
         f.score = min(100, round(max(_advisory_score(a) for a in advs) * (1 if malicious else exposure)))
 

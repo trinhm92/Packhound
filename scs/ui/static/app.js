@@ -191,9 +191,11 @@ function home() {
     <h2>What is checked</h2>
     <div class="card small"><div class="kv">
       <span class="muted">Apps and tools</span><span>Homebrew, APT/Snap, winget/Chocolatey/Scoop, Python, JavaScript (npm), Rust, Go</span>
-      <span class="muted">Developer tools</span><span>JDKs, Node.js, Python and Go installs (security updates, end of life), Android, iOS
-        (Swift, CocoaPods), Flutter/Dart, React Native, Java (Maven/Gradle), .NET, Bun/Deno, Elixir, R, C/C++, GitHub Actions,
-        download caches, git, curl and OpenSSH</span>
+      <span class="muted">Languages</span><span>JavaScript/TypeScript, Python, Java/Kotlin/Scala, Android, Swift/iOS, Flutter/Dart,
+        React Native, .NET, Go, Rust, Ruby, PHP, Elixir/Erlang, Haskell, Julia, OCaml, R, C/C++ (Conan), GitHub Actions</span>
+      <span class="muted">Developer tools</span><span>runtimes (JDK, Node.js, Python, Go, PHP, Ruby, .NET, Rust, Erlang/Elixir, Deno, Bun, Perl,
+        GHC, Julia), build tools (Gradle, Maven, Bazel, pnpm/yarn), global gems/Go programs/.NET tools/Composer, download
+        caches, git, curl and OpenSSH</span>
       <span class="muted">Project folders</span><span>${roots}</span>
       <span class="muted">Malware checks</span><span>install scripts, startup items, browser/editor extensions, tampering, Gradle/Maven wrappers, CI workflows</span>
       <span class="muted">This app</span><span>${s.integrity ? esc({ true: "unchanged since it was built", false: "MODIFIED", null: "not checked" }[s.integrity.ok]

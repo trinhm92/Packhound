@@ -847,6 +847,77 @@ def parse_msbuild(path: Path) -> Parsed:
     return out, None
 
 
+# ---------------------------------------------------------------- PDM, pylock, Haskell, Julia, OCaml, Erlang, Paket
+
+def parse_pdm_lock(path: Path) -> Parsed:
+    d = _read_toml(path)
+    return [_pkg("PyPI", p["name"], str(p["version"]), path) for p in d.get("package") or []
+            if p.get("name") and p.get("version")], None
+
+
+def parse_pylock(path: Path) -> Parsed:
+    """PEP 751 pylock.toml (pip, uv and PDM can write it)."""
+    d = _read_toml(path)
+    return [_pkg("PyPI", p["name"], str(p["version"]), path) for p in d.get("packages") or []
+            if p.get("name") and p.get("version")], None
+
+
+def parse_cabal_freeze(path: Path) -> Parsed:
+    text = path.read_text(encoding="utf-8")
+    return [_pkg("Hackage", n, v, path) for n, v in re.findall(r"\bany\.([\w\-]+)\s*==\s*([\d.]+)", text)], None
+
+
+def parse_stack_lock(path: Path) -> Parsed:
+    text = path.read_text(encoding="utf-8")
+    pairs = re.findall(r"hackage:\s*([\w\-]+?)-(\d[\d.]*)@", text)
+    return [_pkg("Hackage", n, v, path) for n, v in dict.fromkeys(pairs)], None
+
+
+def parse_julia_manifest(path: Path) -> Parsed:
+    d = _read_toml(path)
+    deps = d.get("deps") if isinstance(d.get("deps"), dict) else {k: v for k, v in d.items() if isinstance(v, list)}
+    out: list[Package] = []
+    for name, entries in deps.items():
+        for e in entries if isinstance(entries, list) else [entries]:
+            if isinstance(e, dict) and e.get("version"):  # standard libraries have no version
+                out.append(_pkg("Julia", name, str(e["version"]), path))
+    return out, None
+
+
+def parse_opam_locked(path: Path) -> Parsed:
+    text = path.read_text(encoding="utf-8")
+    return [_pkg("opam", n, v, path) for n, v in re.findall(r'"([\w\-.+]+)"\s*\{\s*=\s*"([^"]+)"', text)], None
+
+
+def parse_rebar_lock(path: Path) -> Parsed:
+    text = path.read_text(encoding="utf-8")
+    return [_pkg("Hex", n, v, path) for n, v in re.findall(r'\{pkg,\s*<<"([\w]+)">>,\s*<<"([^"]+)">>', text)], None
+
+
+def parse_paket_lock(path: Path) -> Parsed:
+    out: list[Package] = []
+    in_nuget = False
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        if line and not line.startswith(" "):
+            in_nuget = line.strip() == "NUGET"
+            continue
+        m = re.match(r"^ {4}([\w.\-]+) \((\d[^)]*)\)", line)
+        if in_nuget and m and not any(p.name == m.group(1) and p.version == m.group(2) for p in out):
+            out.append(_pkg("NuGet", m.group(1), m.group(2), path))
+    return out, None
+
+
+def package_manager(project: Path) -> list[Package]:
+    """The pnpm/yarn/npm version a project pins in package.json "packageManager" (Corepack)."""
+    pj = project / "package.json"
+    spec = str(_read_json(pj).get("packageManager") or "")
+    m = re.match(r"^(npm|pnpm|yarn|bun)@(\d[\w.\-]*)", spec)
+    if not m or m.group(1) == "bun":  # bun isn't published on npm with its advisories
+        return []
+    p = _pkg("npm", m.group(1), m.group(2).split("+")[0], pj, direct=True, dev=True)
+    return [p]
+
+
 # ---------------------------------------------------------------- GitHub Actions used by workflows
 
 _USES = re.compile(r"""^\s*-?\s*uses:\s*['"]?([\w.\-]+/[\w.\-]+)(?:/[^@\s'"]*)?@([^\s'"#]+)['"]?(?:\s*#\s*(\S+))?""", re.M)
@@ -895,8 +966,18 @@ PARSERS: dict[str, Callable[[Path], Parsed]] = {
     "renv.lock": parse_renv_lock,
     "conan.lock": parse_conan_lock,
     "Directory.Packages.props": parse_msbuild,
+    "pdm.lock": parse_pdm_lock,
+    "pylock.toml": parse_pylock,
+    "gems.locked": parse_gemfile_lock,
+    "cabal.project.freeze": parse_cabal_freeze,
+    "stack.yaml.lock": parse_stack_lock,
+    "Manifest.toml": parse_julia_manifest,
+    "JuliaManifest.toml": parse_julia_manifest,
+    "rebar.lock": parse_rebar_lock,
+    "paket.lock": parse_paket_lock,
 }
 _REQ = re.compile(r"^requirements[\w.-]*\.txt$")
+JS_LOCKFILES = {"package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock"}
 BUILD_FILES = {"gradle-wrapper.jar", "gradle-wrapper.properties", "maven-wrapper.jar", "maven-wrapper.properties",
                "gradlew", "mvnw", ".gitlab-ci.yml"}
 
@@ -908,6 +989,12 @@ def parser_for(name: str, parent: Path | None = None) -> Callable[[Path], Parsed
         return parse_requirements
     if name.endswith((".csproj", ".fsproj", ".vbproj")):
         return parse_msbuild
+    if name.endswith(".opam.locked"):
+        return parse_opam_locked
+    if re.fullmatch(r"pylock\.[\w\-]+\.toml", name):
+        return parse_pylock
+    if re.fullmatch(r"Manifest-v[\d.]+\.toml", name):
+        return parse_julia_manifest
     if parent is not None and parent.name == "workflows" and parent.parent.name == ".github" \
             and name.endswith((".yml", ".yaml")):
         return parse_workflow
@@ -955,6 +1042,9 @@ def _collect(ctx: Context) -> list[Package]:
             finalize(graph, pkgs, str(lf))
             ctx.graphs[str(lf)] = graph
         out.extend(pkgs)
+    js = {lf.parent for lf in ctx.lockfiles if lf.name in JS_LOCKFILES}
+    for project in sorted(js):
+        out.extend(package_manager(project))
     return out
 
 

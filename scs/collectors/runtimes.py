@@ -33,7 +33,9 @@ JDK_PRODUCTS = {
     "SAP SE": "sapmachine",
 }
 REFERENCE_JDK = "eclipse-temurin"  # other builds (Homebrew, JetBrains, BellSoft…) follow the same OpenJDK updates
-LABELS = {"java": "Java (JDK)", "node": "Node.js", "python": "Python", "go": "Go"}
+LABELS = {"java": "Java (JDK)", "node": "Node.js", "python": "Python", "go": "Go", "php": "PHP", "ruby": "Ruby",
+          "dotnet": ".NET", "erlang": "Erlang/OTP", "elixir": "Elixir", "rust": "Rust", "deno": "Deno", "bun": "Bun",
+          "perl": "Perl", "ghc": "Haskell (GHC)", "julia": "Julia", "gradle": "Gradle", "maven": "Maven", "bazel": "Bazel"}
 
 
 def _version_of(cmd: list[str]) -> str:
@@ -78,7 +80,13 @@ def _manager(path: str) -> str:
                          ("Android Studio", "Android Studio"), ("/pkg/mod/golang.org/toolchain", "Go toolchain cache"),
                          ("/Library/Frameworks/Python.framework", "python.org installer"),
                          ("/Library/Developer/CommandLineTools", "Apple Command Line Tools"),
-                         ("/Applications/Xcode", "Xcode")):
+                         ("/Applications/Xcode", "Xcode"), ("/.phpenv/", "phpenv"), ("/.rbenv/", "rbenv"),
+                         ("/.rvm/", "rvm"), ("/.rubies/", "chruby"), ("/.rustup/", "rustup"), ("/.ghcup/", "ghcup"),
+                         ("/.stack/", "Stack"), ("/juliaup/", "juliaup"), ("/perlbrew/", "perlbrew"), ("/.plenv/", "plenv"),
+                         ("/MAMP/", "MAMP"), ("/Herd/", "Laravel Herd"), ("/XAMPP/", "XAMPP"), ("laragon", "Laragon"),
+                         ("/.gradle/wrapper/", "Gradle wrapper"), ("/.m2/wrapper/", "Maven wrapper"),
+                         ("bazelisk", "Bazelisk"), ("/.dotnet/", "dotnet-install"), ("/.deno", "Deno installer"),
+                         ("/.bun", "Bun installer"), ("Ruby.framework", "macOS")):
         if marker in rp:
             return name
     return "installer"
@@ -248,8 +256,111 @@ def gos(ctx: Context) -> list[Package]:
     return out
 
 
+# ---------------------------------------------------------------- other runtimes and build tools
+
+_VER = re.compile(r"(\d+\.\d+(?:\.\d+)*)")
+
+
+def _scan(runtime: str, patterns: list[str], from_name: bool = True, exe: str = "", args: tuple = ("--version",),
+          product: str = "", version_file=None, **meta) -> list[Package]:
+    """One runtime/tool per matching folder. The version comes from the folder name (Homebrew Cellar, rbenv,
+    asdf…), from `version_file(folder)`, or, only when nothing on disk records it, from `exe --version`."""
+    out, seen = [], set()
+    for home in _globs(*patterns):
+        real = os.path.realpath(home)
+        if real in seen or os.path.basename(home.rstrip("/\\")) in ("current", "default", "latest"):
+            continue
+        seen.add(real)
+        version = ""
+        if version_file:
+            version = version_file(Path(home)) or ""
+        if not version and from_name:
+            m = _VER.search(os.path.basename(home.rstrip("/\\")))
+            version = m.group(1) if m else ""
+        if not version and exe:
+            binary = os.path.join(home, exe) if not os.path.isabs(exe) else exe
+            version = _version_of([binary, *args]) if os.path.isfile(binary) else ""
+        if version:
+            out.append(_runtime(runtime, version, home, _manager(home), product or runtime, version, **meta))
+    return out
+
+
+def phps() -> list[Package]:
+    pats = [*(f"{b}/Cellar/php*/*" for b in BREW_PREFIXES), "~/.phpenv/versions/*", "~/.asdf/installs/php/*",
+            "~/.local/share/mise/installs/php/*", "/Applications/MAMP/bin/php/php*"]
+    found = _scan("php", pats)
+    found += _scan("php", ["/Applications/XAMPP/xamppfiles", "~/Library/Application Support/Herd/bin"],
+                   from_name=False, exe="bin/php" if not IS_WIN else "php.exe", args=("-n", "-v"))
+    if IS_WIN:
+        found += _scan("php", ["C:\\php*", "C:\\laragon\\bin\\php\\php-*", "C:\\xampp\\php"], from_name=False,
+                       exe="php.exe", args=("-n", "-v"))
+    return found
+
+
+def _apple_ruby_version(home: Path) -> str:
+    m = re.match(r"(\d+\.\d+)", home.name)  # /System/Library/Frameworks/Ruby.framework/Versions/2.6
+    return m.group(1) if m else ""
+
+
+def rubies() -> list[Package]:
+    pats = [*(f"{b}/Cellar/ruby*/*" for b in BREW_PREFIXES), "~/.rbenv/versions/*", "~/.rvm/rubies/ruby-*",
+            "~/.rubies/ruby-*", "~/.asdf/installs/ruby/*", "~/.local/share/mise/installs/ruby/*"]
+    found = _scan("ruby", pats)
+    if IS_MAC:
+        found += _scan("ruby", ["/System/Library/Frameworks/Ruby.framework/Versions/[0-9]*"], from_name=False,
+                       version_file=_apple_ruby_version, vendor_managed=True, vendor="Apple")
+    if IS_WIN:
+        found += _scan("ruby", ["C:\\Ruby*"], from_name=False, exe="bin\\ruby.exe")
+    return found
+
+
+def dotnets() -> list[Package]:
+    """.NET runtimes: each shared/Microsoft.NETCore.App/<version> folder of each .NET install."""
+    roots = ["/usr/local/share/dotnet", "~/.dotnet", "/usr/share/dotnet", *(f"{b}/Cellar/dotnet*/*/libexec" for b in BREW_PREFIXES)]
+    if IS_WIN:
+        roots += [f"{os.environ.get('ProgramFiles', 'C:/Program Files')}\\dotnet", "~/AppData/Local/Microsoft/dotnet"]
+    return _scan("dotnet", [os.path.join(r, "shared", "Microsoft.NETCore.App", "[0-9]*") for r in roots])
+
+
+def _rustup_version(home: Path) -> str:
+    text = _read(str(home / "lib" / "rustlib" / "multirust-channel-manifest.toml"))
+    m = re.search(r'\[pkg\.rustc\]\s*\nversion\s*=\s*"(\d+\.\d+\.\d+)', text)
+    return m.group(1) if m else ""
+
+
+def others() -> list[Package]:
+    brew = lambda name: [f"{b}/Cellar/{name}/*" for b in BREW_PREFIXES]  # noqa: E731
+    found = []
+    found += _scan("erlang", [*brew("erlang*"), "~/.asdf/installs/erlang/*", "~/.local/share/mise/installs/erlang/*"])
+    found += _scan("elixir", [*brew("elixir"), "~/.asdf/installs/elixir/*", "~/.local/share/mise/installs/elixir/*"])
+    found += _scan("rust", ["~/.rustup/toolchains/*"], from_name=False, version_file=_rustup_version)
+    found += _scan("rust", brew("rust"))
+    found += _scan("deno", brew("deno"))
+    found += _scan("deno", ["~/.deno"], from_name=False, exe="bin/deno" if not IS_WIN else "bin\\deno.exe")
+    found += _scan("bun", [*brew("bun"), *(f"{b}/Cellar/oven-sh/*" for b in BREW_PREFIXES)])
+    found += _scan("bun", ["~/.bun"], from_name=False, exe="bin/bun" if not IS_WIN else "bin\\bun.exe")
+    found += _scan("perl", [*brew("perl"), "~/perl5/perlbrew/perls/perl-*", "~/.plenv/versions/*"])
+    found += _scan("ghc", [*brew("ghc*"), "~/.ghcup/ghc/*", "~/.stack/programs/*/ghc-[0-9]*"])
+    found += _scan("julia", ["~/.julia/juliaup/julia-*", *brew("julia")])
+    # build tools: what the wrappers downloaded (= what projects use), SDKMAN and Homebrew installs
+    found += _scan("gradle", ["~/.gradle/wrapper/dists/gradle-*/*/gradle-*", "~/.sdkman/candidates/gradle/[0-9]*",
+                              *brew("gradle")])
+    found += _scan("maven", ["~/.m2/wrapper/dists/apache-maven-*/*/apache-maven-*", "~/.sdkman/candidates/maven/[0-9]*",
+                             *brew("maven")])
+    found += _scan("bazel", ["~/Library/Caches/bazelisk/downloads/bazelbuild/bazel-*",
+                             "~/.cache/bazelisk/downloads/bazelbuild/bazel-*", *brew("bazel")])
+    return found
+
+
 def _collect_runtimes(ctx: Context) -> list[Package]:
-    return jdks() + nodes() + pythons() + gos(ctx)
+    found = jdks() + nodes() + pythons() + gos(ctx) + phps() + rubies() + dotnets() + others()
+    seen, out = set(), []
+    for p in found:  # the same install reached through two paths
+        key = (p.meta["runtime"], p.version, os.path.realpath(p.location))
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
 
 
 # ---------------------------------------------------------------- OS-bundled developer tools
@@ -286,7 +397,8 @@ def _collect_devtools(ctx: Context) -> list[Package]:
     return out
 
 
-RUNTIMES = Collector("runtimes", "Language runtimes: JDKs, Node.js, Python and Go toolchains", True,
+RUNTIMES = Collector("runtimes", "Language runtimes and build tools: JDK, Node.js, Python, Go, PHP, Ruby, .NET, "
+                     "Erlang/Elixir, Rust, Deno, Bun, Perl, GHC, Julia, Gradle, Maven, Bazel", True,
                      lambda ctx: True, _collect_runtimes)
 DEVTOOLS = Collector("devtools", "git, curl and OpenSSH bundled with macOS/Xcode or Windows", True,
                      lambda ctx: IS_MAC or IS_WIN, _collect_devtools)

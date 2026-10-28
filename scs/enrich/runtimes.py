@@ -1,4 +1,4 @@
-"""Security-update status of language runtimes (JDK, Node.js, Python, Go).
+"""Security-update status of language runtimes and build tools (JDK, Node.js, Python, Go, PHP, Ruby, .NET…).
 
 No advisory database lists CVEs by runtime build, so this reports two facts
 from the vendors' release data instead of CVE ids:
@@ -22,6 +22,10 @@ from scs.util import cache_dir, debug, http_json, read_json, write_json
 from scs.versions import vkey
 
 TTL = 24 * 3600
+# runtimes whose patch releases are how security fixes ship, so "behind the latest patch" is a security finding.
+# For build tools and fast-moving runtimes (Gradle, Maven, Bazel, Deno, Bun, GHC, Julia, Rust) a newer release
+# is mostly features: only an end-of-life release line is reported.
+PATCH_IS_SECURITY = {"java", "python", "php", "ruby", "dotnet", "erlang", "elixir", "perl"}
 EOL_URL = "https://endoflife.date/api/{}.json"
 NODE_INDEX = "https://nodejs.org/dist/index.json"
 
@@ -72,13 +76,27 @@ def _latest(c: dict, runtime: str) -> str:
     return norm(c.get("latestJdkVersion") or c.get("latest") or "", runtime)
 
 
+def _line_for(cycles: list[dict], cycle: str, version: str) -> dict | None:
+    """The release line of a version: the longest cycle name that prefixes it ('8.0.32' -> '8', '3.12.1' -> '3.12')."""
+    names = {str(c.get("cycle")): c for c in cycles}
+    if cycle in names:
+        return names[cycle]
+    parts = version.split(".")
+    for n in range(len(parts), 0, -1):
+        if ".".join(parts[:n]) in names:
+            return names[".".join(parts[:n])]
+    return None
+
+
 def advisories_for(p: Package, cycles: list[dict], node_index: list | None = None, today: str | None = None) -> list[Advisory]:
     today = today or date.today().isoformat()
     rt, product, cycle = p.meta["runtime"], p.meta["product"], str(p.meta["cycle"])
-    label = {"java": "Java", "node": "Node.js", "python": "Python", "go": "Go"}[rt]
-    line = next((c for c in cycles if str(c.get("cycle")) == cycle), None)
+    from scs.collectors.runtimes import LABELS
+    label = {"java": "Java"}.get(rt) or LABELS.get(rt, rt)
+    line = _line_for(cycles, cycle, p.version)
     if line is None:
         return []
+    cycle = str(line["cycle"])
     refs = [f"https://endoflife.date/{product}"]
     out: list[Advisory] = []
     if not _supported(line, today):
@@ -103,7 +121,7 @@ def advisories_for(p: Package, cycles: list[dict], node_index: list | None = Non
             references=["https://nodejs.org/en/blog/vulnerability", *refs],
             summary=f"Node.js {p.version} misses security release(s) {', '.join(sorted(missed, key=vkey)[:4]) or 'of this line'}"
                     f"; the latest {cycle}.x is {latest}."))
-    elif rt != "go":  # Go: OSV lists the actual stdlib CVEs
+    elif rt in PATCH_IS_SECURITY:  # Go: OSV lists the actual stdlib CVEs; build tools: only end of life matters
         what = "quarterly security update (Critical Patch Update)" if rt == "java" else "security and bug-fix release"
         out.append(Advisory(
             id=f"UPDATE-{product}-{latest}", severity="MEDIUM", source="eol", fixed=[latest], references=refs,

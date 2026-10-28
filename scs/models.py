@@ -7,7 +7,7 @@ from typing import Optional
 
 # OSV ecosystem names for the ecosystems OSV can answer for.
 OSV_ECOSYSTEMS = {"PyPI", "npm", "crates.io", "Go", "RubyGems", "Packagist", "Maven", "NuGet", "Pub", "SwiftURL", "Hex",
-                  "CRAN", "ConanCenter", "GitHub Actions"}
+                  "CRAN", "ConanCenter", "GitHub Actions", "Hackage", "Julia", "opam"}
 # OSV can't compare versions of these server-side: query every advisory of the package, match ranges here
 CLIENT_SIDE_RANGES = {"GitHub Actions"}
 
@@ -20,7 +20,8 @@ PURL_TYPES = {
     "PyPI": "pypi", "npm": "npm", "crates.io": "cargo", "Go": "golang", "RubyGems": "gem",
     "Packagist": "composer", "Maven": "maven", "NuGet": "nuget", "Homebrew": "brew",
     "Homebrew-cask": "brew-cask", "Snap": "snap", "Flatpak": "flatpak", "Pub": "pub", "SwiftURL": "swift", "Hex": "hex",
-    "CRAN": "cran", "ConanCenter": "conan", "CocoaPods": "cocoapods", "GitHub Actions": "github",
+    "CRAN": "cran", "ConanCenter": "conan", "CocoaPods": "cocoapods", "GitHub Actions": "github", "Hackage": "hackage",
+    "Julia": "julia", "opam": "opam",
 }
 
 SEVERITY_ORDER = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "UNKNOWN": 0}

@@ -364,13 +364,41 @@ The behaviour rules are heuristics that run only on code that executes implicitl
 | `pip` | site-packages for pyenv, Homebrew, python.org, Command Line Tools, conda, pipx, uv tools and every venv under `--root` |
 | `npm-global` | Global node_modules for npm, nvm, volta, fnm, pnpm and bun, with the parent chain |
 | `cargo` | `cargo install` binaries |
-| `lockfile` | **JavaScript:** package-lock, npm-shrinkwrap, yarn.lock, pnpm-lock, bun.lock, deno.lock. **Python:** poetry.lock, uv.lock, Pipfile.lock, requirements*.txt. **Rust, Go, Ruby, PHP:** Cargo.lock, go.mod, Gemfile.lock, composer.lock. **Java/Android:** pom.xml, gradle.lockfile, gradle/libs.versions.toml, and dependencies and plugins written in build.gradle(.kts). **Flutter/Dart:** pubspec.lock. **iOS/macOS:** Swift Package Manager Package.resolved, Carthage Cartfile.resolved, CocoaPods Podfile.lock (no advisory database covers CocoaPods, so pods are only checked against known-malicious lists). **.NET:** packages.lock.json, .csproj/.fsproj/.vbproj, Directory.Packages.props. **Others:** Elixir mix.lock, R renv.lock, C/C++ conan.lock, and the GitHub Actions your workflows use. React Native projects are covered through their npm, Gradle and CocoaPods files. |
+| `lockfile` | **JavaScript:** package-lock, npm-shrinkwrap, yarn.lock, pnpm-lock, bun.lock, deno.lock. **Python:** poetry.lock, uv.lock, pdm.lock, pylock.toml (PEP 751), Pipfile.lock, requirements*.txt. **Rust, Go, Ruby, PHP:** Cargo.lock, go.mod, Gemfile.lock / gems.locked, composer.lock. **Java/Android:** pom.xml, gradle.lockfile, gradle/libs.versions.toml, and dependencies and plugins written in build.gradle(.kts). **Flutter/Dart:** pubspec.lock. **iOS/macOS:** Swift Package Manager Package.resolved, Carthage Cartfile.resolved, CocoaPods Podfile.lock (no advisory database covers CocoaPods, so pods are only checked against known-malicious lists). **.NET:** packages.lock.json, paket.lock, .csproj/.fsproj/.vbproj, Directory.Packages.props. **Others:** Elixir mix.lock, Erlang rebar.lock, Haskell cabal.project.freeze and stack.yaml.lock, Julia Manifest.toml, OCaml *.opam.locked, R renv.lock, C/C++ conan.lock, the package manager pinned in package.json (`packageManager`), and the GitHub Actions your workflows use. React Native projects are covered through their npm, Gradle and CocoaPods files. |
 | `pub-cache` | Dart/Flutter packages every `pub get` on this machine downloaded (`~/.pub-cache`). |
-| `java-cache` | Java libraries every Maven/Gradle build on this machine downloaded (`~/.m2/repository`, `~/.gradle/caches/modules-2`). Only versions with a downloaded `.jar`/`.aar` count. |
-| `runtimes` | JDKs (macOS JavaVirtualMachines, SDKMAN, Homebrew, Android Studio/IntelliJ, Gradle toolchains, Windows vendors), Node.js (Homebrew, nvm, Volta, fnm), Python (pyenv, uv, Homebrew, python.org, Command Line Tools) and Go toolchains. Each is checked for end of life and missed security updates (endoflife.date; nodejs.org's security-release flags), and Go's standard library against OSV. |
+| `java-cache` | Java/Kotlin/Scala libraries every Maven, Gradle, sbt, Mill or Scala CLI build on this machine downloaded (`~/.m2/repository`, `~/.gradle/caches/modules-2`, the Coursier cache). Only versions with a downloaded `.jar`/`.aar` count. |
+| `runtimes` | Installed runtimes and build tools, found from Homebrew, SDKMAN, asdf, mise, rbenv/rvm/chruby, phpenv, rustup, ghcup, juliaup, perlbrew, MAMP/XAMPP/Herd/Laragon, the Gradle/Maven wrappers, Bazelisk and the vendors' installers: **JDK, Node.js, Python, Go, PHP, Ruby, .NET, Erlang, Elixir, Rust, Deno, Bun, Perl, Haskell (GHC), Julia, Gradle, Maven, Bazel**. Each is checked for an end-of-life release line (endoflife.date). Runtimes whose patch releases carry the security fixes (JDK, Python, PHP, Ruby, .NET, Erlang, Elixir, Perl) are also checked for missed updates, Node.js for missed security releases (nodejs.org), Go's standard library against OSV. |
 | `devtools` | git, curl and OpenSSH that Apple (Command Line Tools, Xcode, macOS) or Windows ship, matched against NVD. Homebrew, APT and winget copies come from those collectors; their git/curl/OpenSSH are matched against NVD without `--nvd` too. |
+| `global-tools` | What people install globally, outside any project: **Ruby gems** of every Ruby (including `sudo gem install` into macOS's Ruby; Apple's bundled gems are marked as Apple's), **Go programs** in `~/go/bin` (the modules and Go version recorded inside each binary, read from the file: old dependencies and an old standard library compiled into a tool are found), **.NET global tools**, **Composer global** packages, and the **pnpm/yarn** versions Corepack downloaded. |
+| `nuget-cache` | .NET packages in NuGet's download cache (`~/.nuget/packages`). |
 
-JDKs, Node.js/Python/Go installs, OS-bundled tools, the download caches, and the build files of Android, iOS, Flutter, .NET and the other newer ecosystems are updated by installers, IDEs or by editing build files. Their findings go to **No automatic fix** with step-by-step instructions; scs never runs those steps itself.
+### Coverage by language
+
+Packhound only reads what is already installed; nothing is installed to scan. A ✅ means the part is checked whenever it exists on the machine.
+
+| Language | Project dependencies | Installed globally | Runtime / build tool |
+|---|---|---|---|
+| JavaScript / TypeScript | ✅ npm, yarn, pnpm, Bun, Deno | ✅ npm, pnpm, yarn, Bun, Volta, nvm, fnm globals | ✅ Node.js, Deno, Bun; pnpm/yarn via `packageManager` and Corepack |
+| Python | ✅ requirements, Poetry, uv, PDM, Pipenv, pylock.toml, venvs | ✅ pipx, uv tools, Poetry/PDM installers, conda/mamba, user site | ✅ Python |
+| Java / Kotlin / Scala / Groovy / Clojure | ✅ Maven, Gradle (lockfiles, catalogs, build scripts) | ✅ Maven, Gradle and Coursier caches | ✅ JDKs, Gradle, Maven, Bazel; wrapper jars verified |
+| Android | ✅ Gradle build scripts, plugins (AGP, Kotlin) | ✅ Gradle cache | ✅ JDK, Android Studio's JBR |
+| Swift / Objective-C (iOS, macOS) | ✅ Swift PM, Carthage; CocoaPods inventoried\* | — | — (Xcode updates come from Apple) |
+| Dart / Flutter | ✅ pubspec.lock | ✅ pub cache | —\* |
+| C# / F# / VB (.NET) | ✅ packages.lock.json, Paket, project files, central versions | ✅ .NET global tools, NuGet cache | ✅ .NET runtimes |
+| Go | ✅ go.mod | ✅ Go programs in `~/go/bin` (modules and Go version inside each binary) | ✅ Go toolchains |
+| Rust | ✅ Cargo.lock | ✅ `cargo install` | ✅ Rust toolchains (rustup) |
+| Ruby | ✅ Gemfile.lock / gems.locked | ✅ gems of every Ruby | ✅ Ruby (incl. macOS's) |
+| PHP | ✅ composer.lock | ✅ Composer global | ✅ PHP (Homebrew, MAMP, XAMPP, Herd, Laragon, phpenv) |
+| Elixir / Erlang | ✅ mix.lock, rebar.lock | — | ✅ Elixir, Erlang/OTP |
+| Haskell | ✅ Cabal freeze, Stack lock | — | ✅ GHC |
+| Julia, OCaml, R | ✅ Manifest.toml, opam lock files, renv.lock | — | ✅ Julia |
+| C / C++ | ✅ Conan | Homebrew/APT/winget libraries | Homebrew/APT/winget toolchains |
+| Perl | —\* | — | ✅ Perl |
+| CI | ✅ GitHub Actions versions; workflow and GitLab CI hygiene | | |
+
+\* No public vulnerability database covers CocoaPods, CPAN or vcpkg, and there's no release data for the Flutter/Dart SDK, so those can only be matched against known-malicious lists (or not at all).
+
+Runtimes, OS-bundled tools, globally installed tools, the download caches, and the build files of Android, iOS, Flutter, .NET and the other newer ecosystems are updated by installers, IDEs, package managers or by editing build files. Their findings go to **No automatic fix** with step-by-step instructions; scs never runs those steps itself.
 
 The collectors read metadata files and **never start the packages they inventory or anything that loads them**, so a malicious `.pth` file or install hook can't run during a scan. The only programs a scan starts are version calls: `git`/`curl --version` and `ssh -V` for Apple's or Windows' own copies, and `python -I -S -V` or `node --version` for a runtime whose version isn't written in a file.
 

@@ -38,11 +38,12 @@ class Collector:
 
 
 def registry() -> list[Collector]:
-    from scs.collectors import brew, cargo, dpkg, java, lockfiles, node, pub, python, runtimes, snap, windows
+    from scs.collectors import brew, cargo, dpkg, globaltools, java, lockfiles, node, pub, python, runtimes, snap, windows
     # lockfiles first: the runtimes collector reads the go.mod files it found
     return [lockfiles.COLLECTOR, brew.COLLECTOR, dpkg.COLLECTOR, snap.SNAP, snap.FLATPAK, windows.PROGRAMS,
             windows.WINGET, windows.CHOCO, windows.SCOOP, python.COLLECTOR, node.COLLECTOR, cargo.COLLECTOR,
-            java.COLLECTOR, pub.COLLECTOR, runtimes.RUNTIMES, runtimes.DEVTOOLS]
+            java.COLLECTOR, pub.COLLECTOR, globaltools.NUGET_CACHE, globaltools.COLLECTOR, runtimes.RUNTIMES,
+            runtimes.DEVTOOLS]
 
 
 def run_collectors(ctx: Context) -> tuple[list[Package], dict[str, dict]]:

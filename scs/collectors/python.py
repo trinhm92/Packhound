@@ -47,6 +47,17 @@ SITE_GLOBS = [
     "~/.local/share/pipx/venvs/*/lib/python3*/site-packages",
     "~/.local/share/uv/tools/*/lib/python3*/site-packages",
     "~/.local/share/uv/python/*/lib/python3*/site-packages",
+    "~/AppData/Roaming/uv/tools/*/Lib/site-packages",
+    # Poetry / PDM installed with their own installers (not pipx)
+    "~/Library/Application Support/pypoetry/venv/lib/python3*/site-packages",
+    "~/.local/share/pypoetry/venv/lib/python3*/site-packages",
+    "~/AppData/Roaming/pypoetry/venv/Lib/site-packages",
+    "~/Library/Application Support/pdm/venv/lib/python3*/site-packages",
+    "~/.local/share/pdm/venv/lib/python3*/site-packages",
+    # mamba family
+    "~/micromamba/envs/*/lib/python3*/site-packages", "~/mambaforge/lib/python3*/site-packages",
+    "~/mambaforge/envs/*/lib/python3*/site-packages", "/opt/miniconda3/lib/python3*/site-packages",
+    "/opt/anaconda3/lib/python3*/site-packages",
 ]
 
 
