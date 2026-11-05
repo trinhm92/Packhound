@@ -185,6 +185,10 @@ def plain_finding(f: dict) -> dict:
     elif malicious:
         headline = f"{f['name']} {f['version']} is a known malicious version"
         action = "Remove it, reinstall a clean version, and change passwords/tokens used on this computer."
+    elif any((p.get("meta") or {}).get("newer_installed") for p in f["packages"]):
+        newer = next(p["meta"]["newer_installed"] for p in f["packages"] if (p.get("meta") or {}).get("newer_installed"))
+        headline = f"Remove the old {display_name(f)} {f['version']}: {newer} is installed already"
+        action = "The fixed version is installed, but this old copy still works and stays a risk until you remove it."
     elif f.get("fix_version") and f["bucket"] == "monitor" and not all(handfix.vendor_managed(p) for p in f["packages"]) \
             and all(handfix.manual_only(p) for p in f["packages"]):
         headline = f"Update {display_name(f)} from {f['version']} to {f['fix_version']} by hand"
@@ -225,6 +229,24 @@ def plain_finding(f: dict) -> dict:
     }
 
 
+def leftovers(items: list[dict]) -> dict:
+    """Old copies in download caches next to a fixed version: not issues, but safe to delete (caches re-download)."""
+    from scs.handfix import _qp
+    existing = [i for i in items if any(os.path.exists(loc) for loc in i["locations"])]
+    paths = sorted({loc for i in existing if i.get("cache") != "ruby-default"  # part of Ruby: not to be deleted
+                    for loc in i["locations"] if os.path.exists(loc)})
+    if os.name == "nt":
+        cmd = "Remove-Item -Recurse -Force " + ", ".join(f'"{p}"' for p in paths) if paths else ""
+    else:
+        cmd = "rm -rf " + " ".join(_qp(p) for p in paths) if paths else ""
+    return {"items": [{"name": i["name"], "version": i["version"], "newer": i["newer"], "severity": i["severity"],
+                       "where": {"gradle": "Gradle cache", "maven": "Maven (~/.m2)", "coursier": "Coursier cache",
+                                 "pub": "pub cache", "nuget": "NuGet cache",
+                                 "ruby-default": "ships with Ruby (stays; Ruby loads the newer one)"}.get(i.get("cache"),
+                                                                                                          "download cache")}
+                      for i in existing], "cmd": cmd}
+
+
 def health(scan: dict | None, malware: dict | None) -> dict:
     if not scan:
         return {"level": "unknown", "headline": "Not scanned yet", "detail": "Run your first scan to see how this computer is doing."}
@@ -233,6 +255,11 @@ def health(scan: dict | None, malware: dict | None) -> dict:
         return {"level": "attention", "headline": "Scan incomplete",
                 "detail": "Some vulnerability data could not be downloaded, so problems may be missing. "
                           f"Check the internet connection and scan again. ({osv_note.split(':', 1)[-1].strip()[:180]})"}
+    missing = [r for r in scan.get("missing_roots") or [] if not os.path.isdir(os.path.expanduser(r))]
+    if missing:
+        return {"level": "attention", "headline": "Project folder not found",
+                "detail": f"{', '.join(missing)} no longer exists (moved or renamed?), so the projects in it were not "
+                          "checked. Choose your project folders again in Settings, then scan."}
     b = scan["summary"]["buckets"]
     kev = sum(1 for f in scan["findings"] if any(a.get("kev") for a in f["advisories"]))
     mal = (malware or {}).get("counts") or {}

@@ -184,6 +184,9 @@ function home() {
       ${c.update ? `<button class="big" id="fixsafe">Fix ${c.update} safe item(s)</button>` : ""}
       ${fixableCount(c) ? `<button class="big" id="fixall">Fix everything (${fixableCount(c)})</button>` : ""}
     </div>
+    ${(s.missing_roots || []).length ? `<div class="banner bad">Project folder ${s.missing_roots.map((r) => `<code>${esc(r)}</code>`).join(", ")}
+      no longer exists (moved or renamed?), so the projects in it are not being checked.
+      <button id="fixroots" class="link">Choose project folders</button></div>` : ""}
     ${!s.roots.length && s.scanned ? `<div class="banner warn">Only apps and system-wide tools were checked. Your code projects were not, so
       their dependencies are not included. <button id="addroots" class="link">Choose project folders</button></div>` : ""}
     <div class="tiles">${tiles}</div>
@@ -202,6 +205,8 @@ function home() {
         + (s.integrity.ok !== null ? " (" + s.integrity.detail + ")" : "")) : ""}</span>
     </div></div>`;
   $("#scan").onclick = () => runJob(api("/api/scan", {}));
+  const fr = $("#fixroots");
+  if (fr) fr.onclick = () => { location.hash = "#/settings"; };
   $("#quick").onclick = () => runJob(api("/api/malware", { mode: "quick" }));
   const fs = $("#fixsafe");
   if (fs) fs.onclick = fixSafe;
@@ -277,7 +282,14 @@ async function findings() {
     <div class="tabs">${groups.map((x) => `<button data-tab="${x.id}" class="${x.id === STATE.tab ? "on" : ""}">${esc(x.title)} (${count(x.id)})</button>`).join("")}</div>
     <p class="muted">${esc(g.blurb)}</p>
     <div class="row"><input type="search" id="search" placeholder="Search by name or project…" value="${esc(STATE.search)}"></div>
-    <div id="list">${items.length ? items.map(card).join("") : `<div class="empty">Nothing here.</div>`}</div>`;
+    <div id="list">${items.length ? items.map(card).join("") : `<div class="empty">Nothing here.</div>`}</div>
+    ${F.leftovers && F.leftovers.items.length ? `<details class="card mt"><summary><b>Old copies in download caches (${F.leftovers.items.length})</b>
+      <span class="small muted">not counted as issues: a fixed version is installed next to each</span></summary>
+      <p class="small">You moved on to fixed versions, but the old copies are still on disk: download caches (Gradle, Maven…)
+      keep old downloads, and gems that ship with Ruby can't be uninstalled (Ruby loads the newer one). Cache copies are safe
+      to delete; a build downloads them again if it still needs them.</p>
+      <table>${F.leftovers.items.map((l) => `<tr><td>${esc(l.name)} <b>${esc(l.version)}</b></td><td class="small muted">${esc(l.where)} · fixed ${esc(l.newer)} is there too</td></tr>`).join("")}</table>
+      ${F.leftovers.cmd ? `<div class="cmdline"><code>${esc(F.leftovers.cmd)}</code><button class="link" data-copy="${esc(F.leftovers.cmd)}">Copy</button></div>` : ""}</details>` : ""}`;
   $("#report").onclick = () => openReport("scan");
   document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => { STATE.tab = b.dataset.tab; findings(); }));
   const s = $("#search");

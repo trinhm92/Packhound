@@ -111,6 +111,12 @@ def render(result: dict, limit: int = 15, out=sys.stdout) -> None:
     elif any(not f.get("decision") for f in findings):
         undecided = sum(not f.get("decision") for f in findings)
         w(f"\nNext: {c('scs triage', '1')} ({undecided} findings without a decision), then {c('scs plan', '1')}.\n")
+    left = result.get("leftovers") or []
+    if left:
+        w(f"\n{len(left)} old cop{'y' if len(left) == 1 else 'ies'} in download caches next to a fixed version "
+          "(not counted; safe to delete, see the app's Findings page).\n")
+    for r in result.get("missing_roots") or []:
+        w(c(f"\nProject folder not found: {r} (moved or renamed?). Its projects were not checked.\n", "33"))
 
 
 def render_plan(plan: dict, out=sys.stdout) -> None:
