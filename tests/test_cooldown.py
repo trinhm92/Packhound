@@ -83,7 +83,8 @@ class PlanCooldownTests(unittest.TestCase):
     def test_npm_global_uses_before_and_old_enough_version(self):
         d = Path(tempfile.mkdtemp())
         p = Package("npm", "tool", "1.0.0", "npm-global", str(d / "tool"), direct=True, meta={"root": str(d)})
-        with mock.patch.object(cooldown, "npm_times", return_value={"1.0.1": ago(30), "1.0.2": ago(1), "2.0.0": ago(40)}):
+        with mock.patch.object(cooldown, "npm_times", return_value={"1.0.1": ago(30), "1.0.2": ago(1), "2.0.0": ago(40)}), \
+                mock.patch.object(cooldown, "cutoff", lambda d, now=None: NOW - timedelta(days=d)):  # the test's "now"
             t = self.build([(p, [Advisory("GHSA-n", severity="HIGH", fixed=["1.0.1"])])])["targets"][0]
         install = next(c for c in t["change"] if "install -g" in c)
         self.assertIn("--before ", install)

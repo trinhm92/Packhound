@@ -117,6 +117,7 @@ class App:
                 "malware_scanned": mw.get("started") if mw else None,
                 "counts": vm.counts([vm.plain_finding(f) for f in scan["findings"]]) if scan else None,
                 "malware_counts": (mw or {}).get("counts"), "roots": cfg.get("roots", []),
+                "missing_roots": [r for r in cfg.get("roots", []) if not os.path.isdir(os.path.expanduser(r))],
                 "outdated": len((scan or {}).get("outdated", [])), "integrity": self.integrity(),
                 "job": job.view(len(job.log)) if job else None}
 
@@ -140,7 +141,7 @@ class App:
             d = decisions.get(vm.finding_key(f), {a["id"] for a in f["advisories"]})
             items.append(vm.plain_finding({**f, "decision": d}))
         return {"items": items, "groups": vm.GROUPS, "scanned": scan["started"],
-                "outdated": scan.get("outdated", [])}
+                "outdated": scan.get("outdated", []), "leftovers": vm.leftovers(scan.get("leftovers", []))}
 
     def malware(self) -> dict:
         from scs.malware import ignore

@@ -80,6 +80,9 @@ def perform_scan(cfg, inventory: bool = False, save: bool = True) -> dict:
     started = datetime.now().astimezone().isoformat(timespec="seconds")
     host = host_id()
     ctx = Context(cfg)
+    missing_roots = [r for r in cfg.roots if not Path(os.path.expanduser(r)).is_dir()]
+    for r in missing_roots:
+        log(f"project folder not found: {r} (moved or renamed?) — its projects are not checked")
     packages, stats = run_collectors(ctx)
     log(f"collected {len(packages)} package instances; looking up advisories…")
     prev_scan = history.load(host=host)
@@ -105,6 +108,8 @@ def perform_scan(cfg, inventory: bool = False, save: bool = True) -> dict:
         "inventory": {"total": len(packages), "unique": len(unique),
                       "by_ecosystem": dict(Counter(e for e, _, _ in unique))},
         "has_previous": prev_scan is not None,
+        "missing_roots": missing_roots,
+        "leftovers": actx.leftovers,
         "summary": summarize(findings),
         "findings": [f.to_dict() for f in findings],
         "ignored": ignored,

@@ -77,6 +77,33 @@ def _gradle_root(project: str) -> str:
     return project
 
 
+def _remove_old(rt: str, mgr: str, version: str, loc: str, newer: str, label: str) -> dict:
+    """How to remove an old install once a fixed version is installed next to it."""
+    formula = _formula(loc)
+    sdk = {"java": "java", "gradle": "gradle", "maven": "maven"}.get(rt, rt)
+    tool = ASDF_PLUGIN.get(rt, {"python": "python", "node": "nodejs", "go": "golang", "java": "java"}.get(rt, rt))
+    cmd = {
+        "pyenv": f"pyenv uninstall -f {version}", "rbenv": f"rbenv uninstall -f {version}", "rvm": f"rvm remove {version}",
+        "phpenv": f"phpenv uninstall {version}", "nvm": f"nvm uninstall {version}", "Volta": f"volta uninstall node@{version}",
+        "fnm": f"fnm uninstall {version}", "uv": f"uv python uninstall {version}", "ghcup": f"ghcup rm ghc {version}",
+        "SDKMAN": f"sdk uninstall {sdk} {os.path.basename(loc.rstrip('/'))}", "asdf": f"asdf uninstall {tool} {version}",
+        "mise": f"mise uninstall {tool}@{version}", "perlbrew": f"perlbrew uninstall perl-{version}",
+        "Gradle wrapper": f"rm -rf {_qp(os.path.dirname(os.path.dirname(loc)))}",
+        "Maven wrapper": f"rm -rf {_qp(os.path.dirname(os.path.dirname(loc)))}",
+    }.get(mgr, "")
+    if mgr == "Homebrew" and formula:
+        cmd = f"brew uninstall {formula}" if "@" in formula and not newer.startswith(formula.split("@")[1] + ".") \
+            else f"brew cleanup {formula}"  # an old version of the same formula, left until cleanup
+    elif mgr == "python.org installer":
+        cmd = f"sudo rm -rf {_qp(loc)}"
+    elif rt == "java" and ".jdk/" in loc and loc.startswith("/Library/Java/"):
+        cmd = f"sudo rm -rf {_qp(loc.split('.jdk/')[0] + '.jdk')}"
+    text = (f"You already have {label} {newer} installed. Once nothing uses {version} any more (check JAVA_HOME, "
+            f"version files such as .python-version or .tool-versions, and virtual environments), remove the old one:"
+            if cmd else f"You already have {label} {newer} installed. Remove {version} with the tool you installed it with.")
+    return {"text": text, "cmd": cmd}
+
+
 def _runtime_steps(name: str, version: str, fix: str, p: dict) -> list[dict]:
     meta, loc = p.get("meta") or {}, p.get("location", "")
     rt, mgr = meta.get("runtime"), meta.get("manager", "")
@@ -86,6 +113,10 @@ def _runtime_steps(name: str, version: str, fix: str, p: dict) -> list[dict]:
     from scs.collectors.runtimes import LABELS
     label = {"java": "JDK"}.get(rt) or LABELS.get(rt, name)
     steps: list[dict] = []
+    if meta.get("newer_installed"):  # the fix is installed already; only the old copy is left
+        if mgr in ("Android Studio",) or "IntelliJ IDEA" in loc:
+            return [{"text": f"This {label} is bundled with the IDE: update the IDE (Help › Check for Updates).", "cmd": ""}]
+        return [_remove_old(rt, mgr, version, loc, meta["newer_installed"], label)]
     if moving:
         steps.append({"text": f"{label} {cycle} no longer gets security fixes. Install {label} {new_cycle} "
                               f"and move your projects to it (test them: it is a new release line).", "cmd": ""})
@@ -203,6 +234,15 @@ def steps(ecosystem: str, name: str, version: str, fix: str | None, p: dict) -> 
             return [{"text": "This gem comes with macOS's own Ruby; only Apple updates it. Use your own Ruby (Homebrew, "
                              "rbenv) for your work.", "cmd": "brew install ruby"}]
         gem = _qp(meta.get("gem") or "gem")
+        if meta.get("default"):  # ships with Ruby itself: `gem uninstall` refuses it
+            ruby = _formula(p.get("location", ""))
+            return [{"text": f"{name} {version} comes with this Ruby. Install the fixed gem next to it (Ruby uses the "
+                             "newest), or update Ruby itself.",
+                     "cmd": f"{gem} install {name}" + (f" -v {fix}" if fix else "") +
+                            (f"   # or: brew upgrade {ruby}" if ruby else "")}]
+        if meta.get("newer_installed"):
+            return [{"text": f"{name} {meta['newer_installed']} is installed already; remove the old {version}.",
+                     "cmd": f"{gem} uninstall {name} -v {version}"}]
         return [{"text": f"Update the gem{' to ' + fix if fix else ''}, then remove the old version.",
                  "cmd": f"{gem} install {name}" + (f" -v {fix}" if fix else "") + f" && {gem} uninstall {name} -v {version}"}]
     if src == "go-binary":

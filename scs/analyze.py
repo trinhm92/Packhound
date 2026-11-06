@@ -142,6 +142,8 @@ class AnalysisContext:
     projects: dict[str, dict] = field(default_factory=dict)  # project dir -> toolchain.detect_project()
     brew_versions: dict[str, str] = field(default_factory=dict)
     requirements: Optional[toolchain.Requirements] = None
+    # filled by build_findings: old copies in download caches next to a fixed version (not findings)
+    leftovers: list[dict] = field(default_factory=list)
 
 
 def _fix_version(version: str, advs: list[Advisory], ecosystem: str = "") -> tuple[Optional[str], int]:
@@ -208,6 +210,34 @@ def _bundled_tool_fixes(packages: list[Package], groups: dict, advisories: dict,
     return out
 
 
+CACHE_SOURCES = {"java-cache", "pub-cache", "nuget-cache"}
+
+
+def _install_slot(p: Package) -> tuple:
+    """Where a version counts as 'next to' another one: the same cache, the same Ruby's gems, any install of a runtime."""
+    where = p.meta.get("cache") or p.meta.get("gem_home") or ""
+    name = p.meta.get("runtime") or normalize_name(p.ecosystem, p.name)
+    return (p.source, p.ecosystem, name, where)
+
+
+def _newer_beside(p: Package, fix: str, versions: dict) -> list[str]:
+    """Versions at least as new as the fix, installed in the same place as this package.
+
+    For a runtime whose fix is an update of its own release line (JDK 17.0.18 -> 17.0.21), only that line counts:
+    JDK 25 next to it doesn't replace JDK 17 for projects that need 17. An end-of-life line (Python 3.10, fixed by
+    moving on) is replaced by any newer supported install."""
+    if p.source not in CACHE_SOURCES | {"runtime", "gem"}:
+        return []
+    found = [v for v in versions.get(_install_slot(p), ()) if v != p.version and vkey(v, p.ecosystem) >= vkey(fix, p.ecosystem)]
+    rt = p.meta.get("runtime")
+    if p.source == "runtime" and rt:
+        line = handfix._cycle_of(p.version, rt) if rt not in ("node",) else p.version.split(".")[0]
+        fix_line = handfix._cycle_of(fix, rt) if rt not in ("node",) else fix.split(".")[0]
+        if line == fix_line:
+            found = [v for v in found if (handfix._cycle_of(v, rt) if rt != "node" else v.split(".")[0]) == line]
+    return found
+
+
 def build_findings(packages: list[Package], advisories: dict, file_hits: list[dict],
                    previous: dict[str, set[str]] | None = None,
                    actx: Optional[AnalysisContext] = None) -> tuple[list[Finding], list[dict]]:
@@ -219,6 +249,9 @@ def build_findings(packages: list[Package], advisories: dict, file_hits: list[di
         groups[p.key].append(p)
     _prefetch_requirements(groups, advisories, actx)
     bundle_fix = _bundled_tool_fixes(packages, groups, advisories, actx)
+    versions = defaultdict(set)  # (source, ecosystem, name, where) -> versions installed there
+    for p in packages:
+        versions[_install_slot(p)].add(p.version)
 
     findings: list[Finding] = []
     ignored_out: list[dict] = []
@@ -256,6 +289,26 @@ def build_findings(packages: list[Package], advisories: dict, file_hits: list[di
         latest = first.meta.get("latest")
         if first.source == "brew" and latest and vkey(latest) > vkey(f.version):
             f.fix_version = f.fix_version or latest
+        if f.fix_version and not malicious:
+            superseded = all(_newer_beside(p, f.fix_version, versions) for p in pkgs)
+            if superseded and all(p.source in CACHE_SOURCES or (p.source == "gem" and p.meta.get("default")) for p in pkgs):
+                # the project moved on and the cache just keeps the old download; or a gem that ships with Ruby
+                # (which RubyGems won't uninstall) has a fixed version installed next to it, and Ruby loads the newest
+                actx.leftovers.append({"ecosystem": f.ecosystem, "name": f.name, "version": f.version,
+                                       "fix_version": f.fix_version, "severity": f.severity,
+                                       "cache": first.meta.get("cache") or ("ruby-default" if first.source == "gem" else ""),
+                                       "newer": max((v for p in pkgs for v in _newer_beside(p, f.fix_version, versions)),
+                                                    key=lambda v: vkey(v, f.ecosystem)),
+                                       "locations": sorted({p.location for p in pkgs})})
+                continue
+            for p in pkgs:
+                newer = _newer_beside(p, f.fix_version, versions)
+                if newer and p.source in ("runtime", "gem") and not p.meta.get("vendor_managed"):
+                    p.meta["newer_installed"] = max(newer, key=lambda v: vkey(v, f.ecosystem))
+            if any(p.meta.get("newer_installed") for p in pkgs):
+                newest = max((p.meta["newer_installed"] for p in pkgs if p.meta.get("newer_installed")),
+                             key=lambda v: vkey(v, f.ecosystem))
+                f.reasons.append(f"you also have {newest} installed: this old {f.version} stays usable until you remove it")
 
         annotate(pkgs, actx.graphs)
         if f.fix_version and not malicious:
